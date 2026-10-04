@@ -1,0 +1,144 @@
+{% extends "editor/layout.html" %}
+{% block title %}總覽｜{{ site_name }}{% endblock %}
+{% block dash %}
+<div class="page-head">
+  <div>
+    <h1>{{ '您好，' ~ profile.teacher_name if profile.teacher_name and not assisting else '資料總覽' }}</h1>
+    <p class="muted small">最後修改：{{ profile.updated_at|localtime }}
+      {% if profile.published_at and profile.status == 'published' %}｜最後發布：{{ profile.published_at|localtime }}{% endif %}
+      {% if not assisting and owner.prev_login_at %}｜上次登入：{{ owner.prev_login_at|localtime }}{% endif %}</p>
+  </div>
+</div>
+
+{% if deadline %}
+  <div class="deadline-bar {{ 'deadline-urgent' if days_left is not none and days_left <= 3 else '' }}" role="note">
+    <span class="deadline-label">填寫截止日</span>
+    <strong>{{ deadline }}</strong>
+    <span>{% if days_left > 0 %}還有 {{ days_left }} 天{% elif days_left == 0 %}就是今天{% else %}已截止{% endif %}</span>
+  </div>
+{% endif %}
+
+{% for a in announcements %}
+  <article class="card notice {{ 'notice-pinned' if a.is_pinned }}">
+    <h2><span class="badge badge-info">公告</span> {{ a.title }}</h2>
+    {% if a.body %}<p>{{ a.body|nl2br }}</p>{% endif %}
+    <p class="small muted">{{ a.created_at|localtime('%Y-%m-%d') }}{% if a.ends_on %}・公告至 {{ a.ends_on }}{% endif %}</p>
+  </article>
+{% endfor %}
+
+<div class="card publish-card">
+  <div class="publish-info">
+    <h2>發布狀態 {{ m.status_badge(profile.status, has_changes) }}</h2>
+    {% if profile.status == 'published' %}
+      {% if has_changes %}
+        <p class="callout callout-warn">您有尚未發布的修改，訪客目前看到的是上次發布的版本。請先「預覽」確認後再「重新發布」。</p>
+      {% else %}
+        <p class="muted">訪客看到的是最新內容。</p>
+      {% endif %}
+    {% else %}
+      <p class="muted">目前為草稿，訪客看不到您的頁面。完成後請先預覽，再按「發布」。</p>
+    {% endif %}
+    {% if problems %}
+      <p class="callout callout-info">發布前需完成：{{ problems|join('、') }}</p>
+    {% endif %}
+    <div class="publish-actions">
+      <a class="btn btn-ghost" href="{{ eurl('preview') }}" target="_blank" rel="noopener">預覽</a>
+      <form method="post" action="{{ eurl('do_publish') }}" class="inline-form">
+        {{ m.csrf() }}
+        <button class="btn btn-primary" type="submit" {% if problems %}disabled{% endif %}>
+          {{ '重新發布' if profile.status == 'published' else '發布' }}</button>
+      </form>
+      {% if profile.status == 'published' %}
+        {{ m.confirm_button(eurl('do_unpublish'), '取消發布', '確定要取消發布嗎？公開頁面會立即下架，資料仍保留。', 'btn btn-ghost-danger') }}
+      {% endif %}
+    </div>
+  </div>
+  <div class="qr-box">
+    <img src="{{ eurl('qr_svg') }}" alt="公開頁 QR Code" width="132" height="132">
+    <div class="qr-info">
+      <p class="small"><strong>公開網址</strong>{% if profile.status != 'published' %}<span class="muted">（發布後才能瀏覽）</span>{% endif %}</p>
+      <p class="url-line"><a href="{{ public_url }}" target="_blank" rel="noopener">{{ public_url }}</a></p>
+      <div class="form-actions">
+        <button type="button" class="btn btn-sm btn-ghost" data-copy="{{ public_url }}">複製網址</button>
+        <a class="btn btn-sm btn-ghost" href="{{ eurl('qr_png') }}">下載 QR（PNG）</a>
+        <a class="btn btn-sm btn-ghost" href="{{ eurl('qr_svg', download=1) }}">下載 QR（SVG，印刷用）</a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="grid-2 overview-grid">
+  <section class="card" aria-labelledby="cl-title">
+    <h2 id="cl-title">完成清單 <span class="muted small">必填 {{ pct }}%</span></h2>
+    {{ m.progress(pct) }}
+    <ul class="checklist">
+      {% for it in checklist %}
+        <li class="cl-item {{ 'cl-done' if it.done else ('cl-todo' if it.required else 'cl-optional') }}">
+          <span class="cl-icon" aria-hidden="true">{{ '✓' if it.done else ('!' if it.required else '○') }}</span>
+          <span class="cl-text">
+            <span class="cl-label">{{ it.label }}{% if not it.required %}<span class="cl-tag">選填</span>{% endif %}</span>
+            {% if it.hint %}<span class="cl-hint">{{ it.hint }}</span>{% endif %}
+          </span>
+          {% if not it.done %}
+            <a class="cl-go" href="{{ it.url }}">前往填寫 <span aria-hidden="true">→</span><span class="sr-only">：{{ it.label }}</span></a>
+          {% else %}
+            <a class="cl-edit" href="{{ it.url }}">編輯<span class="sr-only">：{{ it.label }}</span></a>
+          {% endif %}
+        </li>
+      {% endfor %}
+    </ul>
+  </section>
+
+  <div class="stack">
+    <section class="card" aria-labelledby="st-title">
+      <h2 id="st-title">公開頁瀏覽</h2>
+      <dl class="view-stats">
+        <div><dt>近 7 天</dt><dd>{{ stats.d7 }}</dd></div>
+        <div><dt>近 30 天</dt><dd>{{ stats.d30 }}</dd></div>
+        <div><dt>總瀏覽</dt><dd>{{ stats.total }}</dd></div>
+      </dl>
+      <svg class="spark" viewBox="0 0 300 64" role="img" aria-label="近 30 天每日瀏覽次數長條圖，最高 {{ daily_max }} 次" preserveAspectRatio="none">
+        {% for d, v in daily %}
+          {% set h = (v / daily_max * 56) if v else 0 %}
+          <rect x="{{ loop.index0 * 10 + 1 }}" y="{{ 60 - h }}" width="8" height="{{ h if h > 0 else 0 }}" rx="1.5"><title>{{ d }}：{{ v }} 次</title></rect>
+          <rect class="spark-base" x="{{ loop.index0 * 10 + 1 }}" y="61" width="8" height="2"></rect>
+        {% endfor %}
+      </svg>
+      <p class="small muted">每日統計次數，不記錄訪客個人資料；您自己與管理員的瀏覽不計入。</p>
+    </section>
+
+    <section class="card" id="history" aria-labelledby="hi-title">
+      <h2 id="hi-title">發布紀錄</h2>
+      {% if history %}
+        <ul class="history-list">
+          {% for h in history %}
+            <li>
+              <div>
+                <strong>{{ h.published_at|localtime }}</strong>
+                {% if loop.first and profile.status == 'published' %}<span class="badge badge-ok">目前公開版本</span>{% endif %}
+                <span class="muted small block">課程 {{ h.courses }}・照片 {{ h.photos }}{% if h.by_role == 'admin' %}・管理員發布{% endif %}</span>
+              </div>
+              {% if not (loop.first and profile.status == 'published') %}
+                {{ m.confirm_button(eurl('restore', history_id=h.id), '還原此版本', '確定要將公開頁換回這個版本嗎？目前的草稿不會被更動。', 'btn btn-sm btn-ghost') }}
+              {% endif %}
+            </li>
+          {% endfor %}
+        </ul>
+        <p class="small muted">保留最近 10 次發布。還原只會改變訪客看到的公開頁。</p>
+      {% else %}
+        <p class="muted small">尚未發布過。</p>
+      {% endif %}
+    </section>
+  </div>
+</div>
+
+<div class="card callout-card">
+  <h2>小提醒</h2>
+  <ul class="tips">
+    <li>文字會<strong>自動儲存為草稿</strong>，按下「發布」後訪客才看得到。</li>
+    <li><strong>手機號碼與電子郵件</strong>僅供主辦單位聯繫使用，永遠不會出現在公開頁面。</li>
+    <li>照片支援 JPG／PNG（5 MB 內），教案與教材請上傳 PDF（20 MB 內）。</li>
+    <li>QR Code 可放在海報、名牌或活動手冊，掃描後直接開啟您的公開頁。</li>
+  </ul>
+</div>
+{% endblock %}

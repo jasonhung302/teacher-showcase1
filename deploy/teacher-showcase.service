@@ -1,0 +1,18 @@
+# /etc/systemd/system/teacher-showcase.service
+[Unit]
+Description=Teacher Showcase (Flask + gunicorn)
+After=network.target
+
+[Service]
+User=teacher
+Group=teacher
+WorkingDirectory=/opt/teacher-showcase
+EnvironmentFile=/opt/teacher-showcase/.env
+ExecStart=/opt/teacher-showcase/.venv/bin/gunicorn --workers 1 --threads 8 --bind 127.0.0.1:8000 wsgi:app
+Restart=always
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+
+[Install]
+WantedBy=multi-user.target

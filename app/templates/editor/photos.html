@@ -1,0 +1,54 @@
+{% extends "editor/layout.html" %}
+{% block title %}課堂照片｜{{ site_name }}{% endblock %}
+{% block dash %}
+<div class="page-head">
+  <div><h1>課堂照片</h1><span class="badge badge-ok">會顯示在公開頁</span></div>
+  <span class="save-status" data-save-status aria-live="polite"></span>
+</div>
+
+<form method="post" enctype="multipart/form-data" class="card" data-warn-unsaved>
+  {{ m.csrf() }}
+  <h2>上傳照片</h2>
+  <div class="form-grid">
+    <div class="field field-wide">
+      <label for="f-photos">選擇照片（可一次多張）</label>
+      <label class="file-drop">
+        <input id="f-photos" type="file" name="photos" accept=".jpg,.jpeg,.png,image/jpeg,image/png" data-max-mb="5" multiple data-compress="2000" data-preview="#photo-preview">
+        <span class="file-drop-text">點此選擇照片</span>
+        <span class="file-drop-hint">JPG / PNG。過大的照片會先在瀏覽器自動壓縮，系統也會再縮圖並移除拍攝位置等資訊</span>
+      </label>
+    </div>
+    <div class="upload-preview field-wide" id="photo-preview" aria-live="polite"></div>
+    <div class="field field-wide">
+      <label for="caption">照片說明（選填，套用到這次上傳的照片）</label>
+      <input id="caption" name="caption" maxlength="100" placeholder="例：小組使用平板進行協作討論">
+    </div>
+  </div>
+  <p class="small muted">請確認照片中的學生已取得肖像使用同意。最多 {{ config.MAX_PHOTOS }} 張。</p>
+  <div class="form-actions"><button class="btn btn-primary" type="submit">上傳</button></div>
+</form>
+
+<div class="card">
+  <h2>已上傳 {{ rows|length }} 張 <span class="muted small">拖曳 ☰ 調整順序</span></h2>
+  {% if rows %}
+  <ul class="photo-admin-grid sortable" data-reorder="{{ eurl('reorder', kind='photos') }}" aria-label="課堂照片，可拖曳排序">
+    {% for p in rows %}
+      <li class="photo-tile" data-id="{{ p.id }}">
+        <div class="photo-tile-img">
+          <img src="{{ file_url(p.stored_name, p.thumb_name) }}" alt="{{ p.caption or '課堂照片 ' ~ loop.index }}" loading="lazy">
+          <button type="button" class="drag-handle drag-handle-float" aria-label="移動第 {{ loop.index }} 張照片，按上下鍵調整順序">☰</button>
+        </div>
+        <form method="post" action="{{ eurl('photo_caption', photo_id=p.id) }}" class="photo-caption-form">
+          {{ m.csrf() }}
+          <input name="caption" value="{{ p.caption or '' }}" maxlength="100" placeholder="照片說明" aria-label="第 {{ loop.index }} 張照片說明">
+          <button class="btn btn-sm btn-ghost" type="submit">更新</button>
+        </form>
+        {{ m.confirm_button(eurl('photo_delete', photo_id=p.id), '刪除照片', '確定要刪除這張照片嗎？') }}
+      </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+    <p class="empty-inline muted">尚未上傳課堂照片。</p>
+  {% endif %}
+</div>
+{% endblock %}

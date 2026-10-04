@@ -1,0 +1,9 @@
+services:
+  web:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - ./data:/data          # 資料庫與上傳檔（請納入備份）
+    ports:
+      - "127.0.0.1:8000:8000" # 只開給本機 Nginx

@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% import "macros.html" as m with context %}
+{% block title %}備份｜{{ site_name }}{% endblock %}
+{% block body_class %}page-admin{% endblock %}
+{% block main %}
+<div class="container narrow section">
+  <div class="page-head">
+    <div><h1>備份</h1><p class="muted small">最近一次備份：{{ last_backup|localtime if last_backup else '尚未備份' }}</p></div>
+    <a class="btn btn-ghost" href="{{ url_for('admin.dashboard') }}">← 返回列表</a>
+  </div>
+
+  <form method="post" class="card">
+    {{ m.csrf() }}
+    <h2>立即備份</h2>
+    <p>備份內容包含資料庫（帳號、老師資料、發布紀錄）與所有上傳檔案，打包成一個 zip。網站不需停機。</p>
+    <p class="small muted">系統保留最近 14 份。建議定期下載一份存到其他地方（例如雲端硬碟或隨身碟），避免主機故障時一起遺失。</p>
+    <button class="btn btn-primary" type="submit">建立備份</button>
+  </form>
+
+  <div class="card">
+    <h2>備份檔</h2>
+    {% if rows %}
+    <ul class="item-list">
+      {% for b in rows %}
+        <li class="item-row">
+          <div class="item-main"><strong>{{ b.name }}</strong><span class="small muted">{{ b.size|filesize }}</span></div>
+          <div class="item-actions"><a class="btn btn-sm btn-ghost" href="{{ url_for('admin.backup_download', name=b.name) }}">下載</a></div>
+        </li>
+      {% endfor %}
+    </ul>
+    {% else %}<p class="muted">尚無備份。</p>{% endif %}
+  </div>
+
+  <div class="card">
+    <h2>如何還原</h2>
+    <ol class="tips">
+      <li>先停止網站（在執行網站的視窗按 <kbd>Ctrl</kbd> + <kbd>C</kbd>，或 <code>systemctl stop teacher-showcase</code>）。</li>
+      <li>在專案資料夾執行：<code>python -m flask --app wsgi restore-backup 備份檔路徑.zip</code></li>
+      <li>系統會先把目前資料另存為 <code>before-restore-….zip</code>，再還原，最後重新啟動網站即可。</li>
+    </ol>
+    <p class="small muted">每日自動備份：可將 <code>python -m flask --app wsgi backup</code> 加入排程（Windows「工作排程器」或 Linux cron）。</p>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% import "macros.html" as m with context %}
+{% block body_class %}page-dash{% endblock %}
+{% block main %}
+{% if assisting %}
+  <div class="assist-bar">
+    <div class="container assist-bar-inner">
+      <span>管理員協助模式：正在編輯 <strong>{{ profile.teacher_name or '（未填姓名）' }}</strong>（代碼 {{ profile.teacher_code }}）</span>
+      <a class="btn btn-sm btn-light" href="{{ url_for('admin.dashboard') }}">← 返回管理後台</a>
+    </div>
+  </div>
+{% endif %}
+<div class="container dash">
+  <aside class="dash-side">
+    <div class="card side-card">
+      <div class="side-status">
+        {{ m.status_badge(profile.status, has_changes) }}
+        <p class="small muted">必填完成度 {{ pct }}%</p>
+        {{ m.progress(pct) }}
+      </div>
+      <nav class="side-nav" aria-label="編輯選單">
+        {% set ep = request.endpoint.split('.')[-1] %}
+        <a href="{{ eurl('overview') }}" class="{{ 'active' if ep == 'overview' }}" {% if ep == 'overview' %}aria-current="page"{% endif %}>總覽與發布</a>
+        <a href="{{ eurl('profile') }}" class="{{ 'active' if ep == 'profile' }}" {% if ep == 'profile' %}aria-current="page"{% endif %}>基本資料</a>
+        <a href="{{ eurl('photos') }}" class="{{ 'active' if ep.startswith('photo') }}">課堂照片</a>
+        {% for k, cfg in item_types.items() %}
+          <a href="{{ eurl('items', kind=k) }}" class="{{ 'active' if kind == k }}" {% if kind == k %}aria-current="page"{% endif %}>{{ cfg.label }}</a>
+        {% endfor %}
+        <a href="{{ eurl('courses') }}" class="{{ 'active' if ep.startswith('course') }}">數位學習課程</a>
+        <a href="{{ eurl('preview') }}" target="_blank" rel="noopener">預覽公開頁 ↗</a>
+      </nav>
+    </div>
+  </aside>
+  <section class="dash-main">
+    {% block dash %}{% endblock %}
+  </section>
+</div>
+{% endblock %}

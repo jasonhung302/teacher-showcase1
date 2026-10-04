@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% import "macros.html" as m with context %}
+{% block title %}批次匯入教師｜{{ site_name }}{% endblock %}
+{% block body_class %}page-admin{% endblock %}
+{% block main %}
+<div class="container narrow section">
+  <div class="page-head">
+    <h1>批次匯入教師帳號</h1>
+    <a class="btn btn-ghost" href="{{ url_for('admin.dashboard') }}">← 返回列表</a>
+  </div>
+
+  <div class="card">
+    <h2>步驟 1：準備名單</h2>
+    <p>使用 Excel（.xlsx）或 CSV，第一列為標題。可使用英文或中文標題：</p>
+    <table class="spec-table">
+      <thead><tr><th>欄位</th><th>可用標題</th><th>說明</th></tr></thead>
+      <tbody>
+        <tr><td>姓名 <span class="req">*</span></td><td><code>name</code>／姓名</td><td>必填</td></tr>
+        <tr><td>網址代碼</td><td><code>teacher_code</code>／代碼</td><td>空白自動編號（如 005）</td></tr>
+        <tr><td>帳號</td><td><code>username</code>／帳號</td><td>空白自動用 t＋代碼（如 t005）</td></tr>
+        <tr><td>Email</td><td><code>email</code>／電子郵件</td><td>建議填寫，忘記密碼與提醒信使用</td></tr>
+        <tr><td>學校</td><td><code>school</code>／學校</td><td>會預先填入老師的學校全銜</td></tr>
+        <tr><td>縣市</td><td><code>county</code>／縣市</td><td>選填，例如 新北市</td></tr>
+      </tbody>
+    </table>
+    <p><a class="btn btn-sm btn-ghost" href="{{ url_for('admin.import_template') }}">下載範本（CSV，可用 Excel 開啟編輯）</a></p>
+  </div>
+
+  <form class="card" method="post" enctype="multipart/form-data">
+    {{ m.csrf() }}
+    <h2>步驟 2：上傳檔案</h2>
+    <div class="field">
+      <label for="f-import">選擇名單檔案</label>
+      <label class="file-drop">
+        <input id="f-import" type="file" name="file" accept=".xlsx,.csv" data-max-mb="2" required>
+        <span class="file-drop-text">點此選擇 .xlsx 或 .csv</span>
+        <span class="file-drop-hint">一次最多 200 筆，2 MB 以內</span>
+      </label>
+    </div>
+    <p class="small muted">下一步會先顯示預覽與檢查結果，確認後才會建立帳號。</p>
+    <div class="form-actions"><button class="btn btn-primary" type="submit">上傳並預覽</button></div>
+  </form>
+</div>
+{% endblock %}

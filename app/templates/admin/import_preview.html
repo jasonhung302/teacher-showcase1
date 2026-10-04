@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% import "macros.html" as m with context %}
+{% block title %}匯入預覽｜{{ site_name }}{% endblock %}
+{% block body_class %}page-admin{% endblock %}
+{% block main %}
+<div class="container section">
+  <div class="page-head">
+    <div>
+      <h1>匯入預覽</h1>
+      <p class="muted">共 {{ rows|length }} 筆：<strong class="text-ok">{{ ok_count }} 筆可建立</strong>{% if bad_count %}、<strong class="text-danger">{{ bad_count }} 筆有問題（不會匯入）</strong>{% endif %}</p>
+    </div>
+    <a class="btn btn-ghost" href="{{ url_for('admin.import_teachers') }}">← 重新上傳</a>
+  </div>
+
+  <div class="card table-card">
+    <table class="rtable">
+      <thead><tr><th>#</th><th>代碼</th><th>姓名</th><th>帳號</th><th>Email</th><th>學校</th><th>檢查結果</th></tr></thead>
+      <tbody>
+        {% for r in rows %}
+        <tr class="{{ 'row-error' if r.errors }}">
+          <td data-label="#">{{ loop.index }}</td>
+          <td data-label="代碼"><code>{{ r.teacher_code }}</code>{% if r.auto_code %} <span class="badge badge-muted">自動</span>{% endif %}</td>
+          <td data-label="姓名">{{ r.name or '—' }}</td>
+          <td data-label="帳號"><code>{{ r.username or '—' }}</code>{% if r.auto_username %} <span class="badge badge-muted">自動</span>{% endif %}</td>
+          <td data-label="Email">{{ r.email }}</td>
+          <td data-label="學校">{{ r.county }} {{ r.school }}</td>
+          <td data-label="檢查結果">
+            {% if r.errors %}<span class="badge badge-danger">錯誤</span> <span class="small">{{ r.errors|join('、') }}</span>
+            {% else %}<span class="badge badge-ok">可建立</span>{% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <form class="card confirm-bar" method="post" action="{{ url_for('admin.import_confirm') }}"
+        data-confirm="確定建立 {{ ok_count }} 個教師帳號嗎？">
+    {{ m.csrf() }}
+    <input type="hidden" name="payload" value="{{ payload }}">
+    <p>{% if ok_count %}確認無誤後，系統會建立 <strong>{{ ok_count }}</strong> 個帳號並產生臨時密碼。{% else %}沒有可以建立的資料，請修正檔案後重新上傳。{% endif %}</p>
+    <div class="form-actions">
+      <button class="btn btn-primary" type="submit" {% if not ok_count %}disabled{% endif %}>建立 {{ ok_count }} 個帳號</button>
+      <a class="btn btn-ghost" href="{{ url_for('admin.import_teachers') }}">取消</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

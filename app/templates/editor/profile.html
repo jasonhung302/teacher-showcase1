@@ -1,0 +1,91 @@
+{% extends "editor/layout.html" %}
+{% block title %}基本資料｜{{ site_name }}{% endblock %}
+{% block dash %}
+<div class="page-head">
+  <h1>基本資料</h1>
+  <span class="save-status" data-save-status aria-live="polite"></span>
+</div>
+<form method="post" enctype="multipart/form-data" class="stack" data-autosave="{{ eurl('autosave_profile') }}" data-warn-unsaved>
+  {{ m.csrf() }}
+  <div class="card" id="public">
+    <h2>公開資訊 <span class="badge badge-ok">會顯示在公開頁</span></h2>
+    <div class="form-grid">
+      <div class="field">
+        <label for="county">縣市 <span class="req">*</span></label>
+        <select id="county" name="county">
+          <option value="">— 請選擇 —</option>
+          {% for c in counties %}<option value="{{ c }}" {% if form.county == c %}selected{% endif %}>{{ c }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="field">
+        <label for="school_name">學校全銜 <span class="req">*</span></label>
+        <input id="school_name" name="school_name" value="{{ form.school_name or '' }}" maxlength="100" placeholder="例：新北市板橋區○○國民小學">
+      </div>
+      <div class="field">
+        <label for="teacher_name">講師姓名 <span class="req">*</span></label>
+        <input id="teacher_name" name="teacher_name" value="{{ form.teacher_name or '' }}" maxlength="50" autocomplete="name">
+      </div>
+      <div class="field">
+        <label for="job_title">職稱</label>
+        <input id="job_title" name="job_title" value="{{ form.job_title or '' }}" maxlength="50" placeholder="例：五年級導師、資訊組長">
+      </div>
+      <div class="field field-wide">
+        <label for="slogan">Slogan</label>
+        <input id="slogan" name="slogan" value="{{ form.slogan or '' }}" maxlength="60" placeholder="一句話代表您的教學" data-count>
+      </div>
+      <div class="field field-wide">
+        <label for="philosophy">教育理念</label>
+        <textarea id="philosophy" name="philosophy" rows="6" maxlength="1000" data-count>{{ form.philosophy or '' }}</textarea>
+      </div>
+    </div>
+  </div>
+
+  <div class="card" id="avatar">
+    <h2>個人照片 <span class="badge badge-ok">會顯示在公開頁</span></h2>
+    <div class="avatar-edit">
+      <div class="avatar-preview" data-avatar-preview>
+        {% if avatar_name %}
+          <img src="{{ url_for('public.file', name=avatar_name) }}" alt="目前的個人照片">
+        {% else %}
+          <span class="avatar-fallback" aria-hidden="true">{{ (profile.teacher_name or '師')[:1] }}</span>
+        {% endif %}
+      </div>
+      <div class="avatar-fields">
+        <div class="field field-wide">
+          <label for="f-avatar">上傳新照片</label>
+          <label class="file-drop">
+            <input id="f-avatar" type="file" name="avatar" accept=".jpg,.jpeg,.png,image/jpeg,image/png" data-max-mb="5" data-crop="avatar">
+            <span class="file-drop-text">點此選擇照片</span>
+            <span class="file-drop-hint">JPG / PNG，5 MB 以內。選擇後可以裁切成 1:1 或 4:5</span>
+          </label>
+        </div>
+        {% if avatar_name %}
+          <label class="check"><input type="checkbox" name="remove_avatar" value="1"> 移除目前照片</label>
+        {% endif %}
+        <p class="small muted">照片需按下方「儲存草稿」才會上傳。</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="card card-private" id="contact">
+    <h2>內部聯繫資料 <span class="badge badge-private">不公開</span></h2>
+    <p class="muted small">僅供主辦單位與管理員聯繫使用，不會出現在任何公開頁面。</p>
+    <div class="form-grid">
+      <div class="field">
+        <label for="phone">手機號碼</label>
+        <input id="phone" name="phone" type="tel" value="{{ form.phone or '' }}" maxlength="20" placeholder="0912-345-678" autocomplete="tel">
+      </div>
+      <div class="field">
+        <label for="contact_email">電子郵件</label>
+        <input id="contact_email" name="contact_email" type="email" value="{{ form.contact_email or '' }}" maxlength="120" autocomplete="email">
+      </div>
+    </div>
+  </div>
+
+  <div class="form-actions sticky-actions">
+    <button class="btn btn-primary" type="submit">儲存草稿</button>
+    <a class="btn btn-ghost" href="{{ eurl('preview') }}" target="_blank" rel="noopener">預覽</a>
+    <span class="save-status" data-save-status aria-hidden="true"></span>
+  </div>
+</form>
+{% endblock %}

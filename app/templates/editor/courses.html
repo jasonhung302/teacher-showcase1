@@ -1,0 +1,42 @@
+{% extends "editor/layout.html" %}
+{% block title %}數位學習課程｜{{ site_name }}{% endblock %}
+{% block dash %}
+<div class="page-head">
+  <div><h1>數位學習課程</h1><p class="small muted">拖曳 ☰ 調整公開頁上的課程順序</p></div>
+  <div class="head-actions">
+    <span class="save-status" data-save-status aria-live="polite"></span>
+    <a class="btn btn-primary" href="{{ eurl('course_new') }}">＋ 新增課程</a>
+  </div>
+</div>
+{% if rows %}
+  <ul class="course-list sortable" data-reorder="{{ eurl('reorder', kind='courses') }}" aria-label="課程列表，可拖曳排序">
+  {% for c in rows %}
+  <li class="card course-row" data-id="{{ c.id }}">
+    <button type="button" class="drag-handle" aria-label="移動「{{ c.title }}」，按上下鍵調整順序">☰</button>
+    <div class="course-row-main">
+      <div class="chips">
+        {% if c.subject %}<span class="chip">{{ c.subject }}</span>{% endif %}
+        {% if c.grade %}<span class="chip chip-light">{{ c.grade }}</span>{% endif %}
+        {% if c.student_count %}<span class="chip chip-light">{{ c.student_count }} 人</span>{% endif %}
+      </div>
+      <h2>{{ c.title }}</h2>
+      {% if c.unit %}<p class="muted">單元：{{ c.unit }}</p>{% endif %}
+      <p class="small">
+        {% for label, ok in [('學習目標', c.objectives), ('課程介紹', c.intro), ('四學運用', c.four_learning), ('AI 運用', c.ai_usage), ('教案', c.plans)] %}
+          <span class="check-pill {{ 'ok' if ok else '' }}">{{ '✓' if ok else '○' }} {{ label }}</span>
+        {% endfor %}
+      </p>
+    </div>
+    <div class="item-actions">
+      <a class="btn btn-sm btn-ghost" href="{{ eurl('course_edit', course_id=c.id) }}">編輯</a>
+      {{ m.confirm_button(eurl('course_delete', course_id=c.id), '刪除', '確定刪除此課程？課程內的教案與附件也會一併刪除。') }}
+    </div>
+  </li>
+  {% endfor %}
+  </ul>
+{% else %}
+  <div class="card empty">
+    <p>還沒有課程。按「新增課程」開始填寫您的數位學習課程。</p>
+  </div>
+{% endif %}
+{% endblock %}

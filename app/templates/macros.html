@@ -1,0 +1,56 @@
+{# 共用表單元件 #}
+{% macro csrf() %}<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{% endmacro %}
+
+{% macro field(f, form) %}
+  {% set val = form.get(f.name) if form else '' %}
+  <div class="field {{ 'field-wide' if f.type == 'textarea' else '' }}">
+    <label for="f-{{ f.name }}">{{ f.label }}{% if f.required %} <span class="req" aria-hidden="true">*</span>{% endif %}</label>
+    {% if f.type == 'textarea' %}
+      <textarea id="f-{{ f.name }}" name="{{ f.name }}" rows="3" {% if f.max %}maxlength="{{ f.max }}"{% endif %}
+        {% if f.required %}required{% endif %} placeholder="{{ f.placeholder or '' }}">{{ val or '' }}</textarea>
+    {% elif f.type == 'select' %}
+      <select id="f-{{ f.name }}" name="{{ f.name }}">
+        <option value="">— 請選擇 —</option>
+        {% for o in f.options %}<option value="{{ o }}" {% if val == o %}selected{% endif %}>{{ o }}</option>{% endfor %}
+      </select>
+    {% else %}
+      <input id="f-{{ f.name }}" name="{{ f.name }}" type="text" value="{{ val or '' }}"
+        {% if f.max %}maxlength="{{ f.max }}"{% endif %} {% if f.required %}required{% endif %}
+        placeholder="{{ f.placeholder or '' }}">
+    {% endif %}
+  </div>
+{% endmacro %}
+
+{% macro file_input(name, label, accept, hint, max_mb, multiple=false) %}
+  <div class="field field-wide">
+    <label for="f-{{ name }}">{{ label }}</label>
+    <label class="file-drop">
+      <input id="f-{{ name }}" type="file" name="{{ name }}" accept="{{ accept }}" data-max-mb="{{ max_mb }}" {% if multiple %}multiple{% endif %}>
+      <span class="file-drop-text">點此選擇檔案</span>
+      <span class="file-drop-hint">{{ hint }}</span>
+    </label>
+  </div>
+{% endmacro %}
+
+{% macro status_badge(status, has_changes=false) %}
+  {% if status == 'published' %}
+    <span class="badge badge-ok">已發布</span>
+    {% if has_changes %}<span class="badge badge-warn">有未發布的修改</span>{% endif %}
+  {% else %}
+    <span class="badge badge-muted">草稿</span>
+  {% endif %}
+{% endmacro %}
+
+{% macro progress(pct) %}
+  <div class="progress" role="progressbar" aria-valuenow="{{ pct }}" aria-valuemin="0" aria-valuemax="100">
+    <div class="progress-bar progress-w-{{ (pct // 5) * 5 }}"></div>
+  </div>
+{% endmacro %}
+
+{% macro confirm_button(action, label, message, cls='btn btn-sm btn-ghost-danger', extra=None) %}
+  <form method="post" action="{{ action }}" class="inline-form" data-confirm="{{ message }}">
+    {{ csrf() }}
+    {% if extra %}{% for k, v in extra.items() %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endfor %}{% endif %}
+    <button type="submit" class="{{ cls }}">{{ label }}</button>
+  </form>
+{% endmacro %}

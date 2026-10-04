@@ -1,0 +1,281 @@
+{% extends "base.html" %}
+{% set desc = (t.slogan ~ '｜' if t.slogan else '') ~ (t.philosophy|replace('\n', ' ')|truncate(110, True, '…') if t.philosophy else t.school_name ~ ' ' ~ t.job_title) %}
+{% block title %}{{ t.teacher_name or '教師' }}｜{{ t.school_name }}｜{{ site_name }}{% endblock %}
+{% block meta %}
+  {% if preview %}<meta name="robots" content="noindex, nofollow">{% endif %}
+  <meta name="description" content="{{ desc }}">
+  {% if page_url %}<link rel="canonical" href="{{ page_url }}">{% endif %}
+  <meta property="og:type" content="profile">
+  <meta property="og:site_name" content="{{ site_name }}">
+  <meta property="og:title" content="{{ t.teacher_name }}｜{{ t.school_name }}">
+  <meta property="og:description" content="{{ desc }}">
+  {% if page_url %}<meta property="og:url" content="{{ page_url }}">{% endif %}
+  {% if t.avatar and site_root %}
+  <meta property="og:image" content="{{ site_root }}{{ url_for('public.file', name=t.avatar) }}">
+  <meta property="og:image:alt" content="{{ t.teacher_name }} 的照片">
+  {% endif %}
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="{{ t.teacher_name }}｜{{ t.school_name }}">
+  <meta name="twitter:description" content="{{ desc }}">
+{% endblock %}
+{% block body_class %}page-teacher{% endblock %}
+{% block main %}
+{% if preview %}
+  <div class="preview-bar">
+    <div class="container preview-bar-inner">
+      <span><strong>預覽模式</strong>｜這是「目前草稿」發布後的樣子，訪客尚看不到。</span>
+      <a class="btn btn-sm btn-light" href="{{ back_url }}">← 返回編輯</a>
+    </div>
+  </div>
+{% endif %}
+
+<section class="t-hero">
+  <div class="container t-hero-inner">
+    <div class="t-photo">
+      {% if t.avatar %}
+        <img src="{{ file_url(t.avatar, t.avatar_thumb) }}" alt="{{ t.teacher_name }} 的個人照片">
+      {% else %}
+        <span class="avatar-fallback avatar-xl" aria-hidden="true">{{ (t.teacher_name or '師')[:1] }}</span>
+      {% endif %}
+    </div>
+    <div class="t-intro">
+      <p class="t-school">{% if t.county %}<span>{{ t.county }}</span>{% endif %}{{ t.school_name }}</p>
+      <h1>{{ t.teacher_name or '（尚未填寫姓名）' }}</h1>
+      {% if t.job_title %}<p class="t-title">{{ t.job_title }}</p>{% endif %}
+      {% if t.slogan %}<blockquote class="t-slogan">{{ t.slogan }}</blockquote>{% endif %}
+      {% if t.specialties %}
+        <ul class="t-tags" aria-label="教學專長">
+          {% for s in t.specialties %}<li>{{ s.name }}</li>{% endfor %}
+        </ul>
+      {% endif %}
+      <div class="t-actions">
+        {% if t.courses %}<a class="btn btn-accent" href="#courses">看數位課程成果</a>{% endif %}
+        {% if not preview %}
+          <button type="button" class="btn btn-outline-light" data-share
+                  data-title="{{ t.teacher_name }}｜{{ t.school_name }}" data-text="{{ t.slogan or desc }}"
+                  data-url="{{ page_url }}" aria-haspopup="dialog">分享</button>
+          <button type="button" class="btn btn-outline-light hide-sm" data-print>列印／存 PDF</button>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  <div class="container">
+    <dl class="t-stats">
+      <div><dt>數位課程</dt><dd>{{ t.courses|length }}</dd></div>
+      <div><dt>課堂照片</dt><dd>{{ t.photos|length }}</dd></div>
+      <div><dt>獲獎</dt><dd>{{ t.awards|length }}</dd></div>
+      <div><dt>認證</dt><dd>{{ t.certifications|length }}</dd></div>
+    </dl>
+  </div>
+</section>
+
+<nav class="section-nav" aria-label="頁面導覽">
+  <div class="container section-nav-inner">
+    {% if t.philosophy %}<a href="#about">關於我</a>{% endif %}
+    {% if t.specialties %}<a href="#specialties">教學專長</a>{% endif %}
+    {% if t.experiences or t.educations %}<a href="#background">經歷與學歷</a>{% endif %}
+    {% if t.courses %}<a href="#courses">數位課程成果</a>{% endif %}
+    {% if t.photos %}<a href="#photos">課堂照片</a>{% endif %}
+    {% if t.awards or t.certifications %}<a href="#honors">獲獎與認證</a>{% endif %}
+  </div>
+</nav>
+
+<div class="t-body">
+  {% if t.philosophy %}
+  <section id="about" class="t-section">
+    <div class="container t-about">
+      <header class="t-section-head"><p class="eyebrow">About</p><h2>關於我｜教育理念</h2></header>
+      <div class="t-about-text">
+        <p class="prose">{{ t.philosophy|nl2br }}</p>
+      </div>
+    </div>
+  </section>
+  {% endif %}
+
+  {% if t.specialties %}
+  <section id="specialties" class="t-section t-section-alt">
+    <div class="container">
+      <header class="t-section-head"><p class="eyebrow">Expertise</p><h2>教學專長</h2></header>
+      <div class="spec-grid">
+        {% for s in t.specialties %}
+          <article class="spec-card">
+            <span class="spec-num" aria-hidden="true">{{ '%02d'|format(loop.index) }}</span>
+            <h3>{{ s.name }}</h3>
+            {% if s.description %}<p>{{ s.description|nl2br }}</p>{% endif %}
+          </article>
+        {% endfor %}
+      </div>
+    </div>
+  </section>
+  {% endif %}
+
+  {% if t.experiences or t.educations %}
+  <section id="background" class="t-section">
+    <div class="container">
+      <header class="t-section-head"><p class="eyebrow">Background</p><h2>經歷與學歷</h2></header>
+      <div class="grid-2 bg-grid">
+        {% if t.experiences %}
+        <div>
+          <h3 class="sub-head">教學經歷</h3>
+          <ol class="timeline">
+            {% for e in t.experiences %}
+              <li>
+                {% if e.period %}<span class="timeline-period">{{ e.period }}</span>{% endif %}
+                <strong>{{ e.organization }}</strong>{% if e.role %}<span class="timeline-role">{{ e.role }}</span>{% endif %}
+                {% if e.description %}<p class="muted small">{{ e.description|nl2br }}</p>{% endif %}
+              </li>
+            {% endfor %}
+          </ol>
+        </div>
+        {% endif %}
+        {% if t.educations %}
+        <div>
+          <h3 class="sub-head">學歷</h3>
+          <ol class="timeline">
+            {% for e in t.educations %}
+              <li>
+                {% if e.period %}<span class="timeline-period">{{ e.period }}</span>{% endif %}
+                <strong>{{ e.school }}</strong>
+                <span class="timeline-role">{{ e.department }}{% if e.degree %}　{{ e.degree }}{% endif %}</span>
+              </li>
+            {% endfor %}
+          </ol>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </section>
+  {% endif %}
+
+  {% if t.courses %}
+  <section id="courses" class="t-section t-section-alt">
+    <div class="container">
+      <header class="t-section-head"><p class="eyebrow">Digital Learning</p><h2>數位課程成果</h2></header>
+      {% for c in t.courses %}
+      <article class="course-card">
+        <header class="course-head">
+          <div>
+            <div class="chips">
+              {% if c.subject %}<span class="chip">{{ c.subject }}</span>{% endif %}
+              {% if c.grade %}<span class="chip chip-light">{{ c.grade }}</span>{% endif %}
+            </div>
+            <h3>{{ c.title }}</h3>
+            {% if c.unit %}<p class="muted">單元：{{ c.unit }}</p>{% endif %}
+          </div>
+          <dl class="course-meta">
+            {% if c.grade %}<div><dt>授課年級</dt><dd>{{ c.grade }}</dd></div>{% endif %}
+            {% if c.student_count %}<div><dt>學生數</dt><dd>{{ c.student_count }} 人</dd></div>{% endif %}
+          </dl>
+        </header>
+        <div class="course-main">
+          {% if c.objectives %}<div class="course-block"><h4>學習目標</h4><p>{{ c.objectives|nl2br }}</p></div>{% endif %}
+          {% if c.intro %}<div class="course-block"><h4>課程介紹</h4><p>{{ c.intro|nl2br }}</p></div>{% endif %}
+        </div>
+        {% if c.four_learning or c.ai_usage %}
+        <div class="grid-2 course-uses">
+          {% if c.four_learning %}<div class="course-block use-four"><h4>四學運用</h4><p>{{ c.four_learning|nl2br }}</p></div>{% endif %}
+          {% if c.ai_usage %}<div class="course-block use-ai"><h4>AI 運用</h4><p>{{ c.ai_usage|nl2br }}</p></div>{% endif %}
+        </div>
+        {% endif %}
+        {% if c.plans %}
+        <div class="course-block course-downloads">
+          <h4>教案下載</h4>
+          <ul class="download-list">
+            {% for p in c.plans %}
+              <li><a class="download" href="{{ url_for('public.file', name=p.file) }}">
+                <span class="file-icon" aria-hidden="true">PDF</span>
+                <span><strong>{{ p.title }}</strong>
+                  <span class="muted small">{{ '完整教案' if p.type == 'lesson_plan' else '教材附件' }}・{{ p.size|filesize }}</span></span>
+              </a></li>
+            {% endfor %}
+          </ul>
+        </div>
+        {% endif %}
+      </article>
+      {% endfor %}
+    </div>
+  </section>
+  {% endif %}
+
+  {% if t.photos %}
+  <section id="photos" class="t-section">
+    <div class="container">
+      <header class="t-section-head"><p class="eyebrow">In Class</p><h2>課堂照片</h2></header>
+      <div class="gallery" data-lightbox>
+        {% for p in t.photos %}
+          <figure>
+            <a href="{{ url_for('public.file', name=p.file) }}" data-full="{{ url_for('public.file', name=p.file) }}"
+               data-caption="{{ p.caption }}" aria-label="放大檢視第 {{ loop.index }} 張照片{{ '：' ~ p.caption if p.caption }}">
+              <img src="{{ file_url(p.file, p.thumb) }}" alt="{{ p.caption or (t.teacher_name ~ ' 的課堂照片 ' ~ loop.index) }}" loading="lazy" decoding="async">
+            </a>
+            {% if p.caption %}<figcaption>{{ p.caption }}</figcaption>{% endif %}
+          </figure>
+        {% endfor %}
+      </div>
+    </div>
+  </section>
+  {% endif %}
+
+  {% if t.awards or t.certifications %}
+  <section id="honors" class="t-section t-section-alt">
+    <div class="container">
+      <header class="t-section-head"><p class="eyebrow">Honors</p><h2>獲獎與認證</h2></header>
+      <div class="honor-grid">
+        {% for a in t.awards %}
+          <div class="honor">
+            <span class="honor-icon honor-award" aria-hidden="true"></span>
+            <div><span class="honor-kind">獲獎</span><strong>{{ a.title }}</strong>
+              <p class="muted small">{{ a.issuer }}{% if a.issuer and a.award_date %}・{% endif %}{{ a.award_date }}</p>
+              {% if a.description %}<p class="small">{{ a.description|nl2br }}</p>{% endif %}</div>
+          </div>
+        {% endfor %}
+        {% for c in t.certifications %}
+          <div class="honor">
+            <span class="honor-icon honor-cert" aria-hidden="true"></span>
+            <div><span class="honor-kind">認證</span><strong>{{ c.name }}</strong>
+              <p class="muted small">{{ c.issuer }}{% if c.issuer and c.cert_date %}・{% endif %}{{ c.cert_date }}</p>
+              {% if c.description %}<p class="small">{{ c.description|nl2br }}</p>{% endif %}</div>
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+  </section>
+  {% endif %}
+
+  {% if not preview %}
+  <section class="t-section t-share-band">
+    <div class="container t-share-inner">
+      <img class="t-share-qr" src="{{ url_for('public.teacher_qr', code=t.teacher_code) }}" alt="本頁 QR Code" width="120" height="120">
+      <div>
+        <h2>分享這位老師的成果</h2>
+        <p class="muted">掃描 QR Code 或複製連結，即可在手機上瀏覽本頁。</p>
+        <div class="form-actions">
+          <button type="button" class="btn btn-primary" data-copy="{{ page_url }}">複製連結</button>
+          <a class="btn btn-ghost" href="{{ url_for('public.home') }}">← 看其他老師</a>
+        </div>
+      </div>
+    </div>
+  </section>
+  {% endif %}
+</div>
+
+{% if not preview %}
+<div class="share-sheet" id="share-sheet" role="dialog" aria-modal="true" aria-labelledby="share-title" hidden>
+  <div class="share-panel">
+    <div class="share-head">
+      <h2 id="share-title">分享</h2>
+      <button type="button" class="btn-icon" data-share-close aria-label="關閉">✕</button>
+    </div>
+    <div class="share-body">
+      <img src="{{ url_for('public.teacher_qr', code=t.teacher_code) }}" alt="本頁 QR Code" width="160" height="160">
+      <div class="share-buttons">
+        <button type="button" class="btn btn-ghost" data-copy="{{ page_url }}">複製連結</button>
+        <a class="btn btn-line" href="https://social-plugins.line.me/lineit/share?url={{ page_url|urlencode }}" target="_blank" rel="noopener">LINE</a>
+        <a class="btn btn-fb" href="https://www.facebook.com/sharer/sharer.php?u={{ page_url|urlencode }}" target="_blank" rel="noopener">Facebook</a>
+      </div>
+      <p class="small muted share-url">{{ page_url }}</p>
+    </div>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

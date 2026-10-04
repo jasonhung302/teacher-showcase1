@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="zh-Hant-TW">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}{{ site_name }}{% endblock %}</title>
+  {% block meta %}
+  <meta name="description" content="{{ site_tagline }}">
+  <meta property="og:site_name" content="{{ site_name }}">
+  <meta property="og:title" content="{{ site_name }}">
+  <meta property="og:description" content="{{ site_tagline }}">
+  <meta property="og:type" content="website">
+  {% endblock %}
+  <meta name="theme-color" content="#1f5f8b">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  <link rel="icon" href="{{ url_for('static', filename='img/favicon.svg') }}" type="image/svg+xml">
+  {% block head %}{% endblock %}
+</head>
+<body class="{% block body_class %}{% endblock %}">
+  <a class="skip-link" href="#main">跳到主要內容</a>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <a class="brand" href="{{ url_for('public.home') }}">
+        <span class="brand-mark" aria-hidden="true"></span>
+        <span class="brand-text">{{ site_name }}</span>
+      </a>
+      <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="site-nav">
+        <span class="sr-only">選單</span><span class="bar"></span><span class="bar"></span><span class="bar"></span>
+      </button>
+      <nav id="site-nav" class="site-nav" aria-label="主選單">
+        <a href="{{ url_for('public.home') }}">教師列表</a>
+        {% if current_user %}
+          {% if current_user.role == 'admin' %}
+            <a href="{{ url_for('admin.dashboard') }}">管理後台</a>
+          {% else %}
+            <a href="{{ url_for('me.overview') }}">我的資料</a>
+          {% endif %}
+          <a href="{{ url_for('auth.change_password') }}">修改密碼</a>
+          <form method="post" action="{{ url_for('auth.logout') }}" class="inline-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="linklike">登出（{{ current_user.display_name }}）</button>
+          </form>
+        {% else %}
+          <a class="btn btn-sm btn-primary" href="{{ url_for('auth.login') }}">教師登入</a>
+        {% endif %}
+      </nav>
+    </div>
+  </header>
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      <div class="flash-wrap" role="status" aria-live="polite">
+        {% for cat, msg in messages %}
+          <div class="flash flash-{{ cat }}">{{ msg }}</div>
+        {% endfor %}
+      </div>
+    {% endif %}
+  {% endwith %}
+
+  <main id="main" tabindex="-1">{% block main %}{% endblock %}</main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+      <span>© {{ site_name }}</span>
+      <span class="muted">教師個人資料與數位課程展示</span>
+    </div>
+  </footer>
+  <script src="{{ url_for('static', filename='js/app.js') }}" defer></script>
+</body>
+</html>

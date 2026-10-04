@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+{% block body_class %}page-home{% endblock %}
+
+{% macro teacher_card(t) %}
+  <a class="teacher-card card" href="{{ url_for('public.teacher', code=t.teacher_code) }}">
+    <div class="teacher-card-photo">
+      {% if t.avatar %}
+        <img src="{{ file_url(t.avatar, t.avatar_thumb) }}" alt="" loading="lazy" decoding="async">
+      {% else %}
+        <span class="avatar-fallback" aria-hidden="true">{{ t.teacher_name[:1] }}</span>
+      {% endif %}
+    </div>
+    <div class="teacher-card-body">
+      <h3>{{ t.teacher_name }}</h3>
+      <p class="teacher-card-school">{{ t.county }}｜{{ t.school_name }}</p>
+      {% if t.job_title %}<p class="muted small">{{ t.job_title }}</p>{% endif %}
+      <div class="chips">
+        {% for s in t.subjects %}<span class="chip">{{ s }}</span>{% endfor %}
+      </div>
+      {% if t.slogan %}<p class="teacher-card-slogan">「{{ t.slogan }}」</p>{% endif %}
+    </div>
+  </a>
+{% endmacro %}
+
+{% block main %}
+<section class="hero">
+  <div class="container">
+    <p class="eyebrow">數位學習 · 智慧教室</p>
+    <h1>{{ site_name }}</h1>
+    <p class="hero-lead">{{ site_tagline }}。目前共有 <strong>{{ total }}</strong> 位老師分享數位課程。</p>
+
+    <form class="search-card card" method="get" action="{{ url_for('public.home') }}#list" role="search">
+      <div class="search-grid">
+        <div class="field">
+          <label for="q">關鍵字</label>
+          <input id="q" name="q" type="search" value="{{ filters.q }}" placeholder="老師姓名、課程、專長…">
+        </div>
+        <div class="field">
+          <label for="county">縣市</label>
+          <select id="county" name="county">
+            <option value="">全部縣市</option>
+            {% for c in counties %}<option value="{{ c }}" {% if filters.county == c %}selected{% endif %}>{{ c }}</option>{% endfor %}
+          </select>
+        </div>
+        <div class="field">
+          <label for="subject">科目／領域</label>
+          <select id="subject" name="subject">
+            <option value="">全部領域</option>
+            {% for s in subjects %}<option value="{{ s }}" {% if filters.subject == s %}selected{% endif %}>{{ s }}</option>{% endfor %}
+          </select>
+        </div>
+        <div class="field">
+          <label for="school">學校</label>
+          <input id="school" name="school" type="search" value="{{ filters.school }}" placeholder="學校名稱">
+        </div>
+        <div class="search-actions">
+          <button class="btn btn-primary" type="submit">搜尋</button>
+          {% if filtering %}
+            <a class="btn btn-ghost" href="{{ url_for('public.home') }}">清除</a>
+          {% endif %}
+        </div>
+      </div>
+    </form>
+  </div>
+</section>
+
+{% if not filtering and (popular or latest) %}
+<section class="container section highlights">
+  <div class="grid-2">
+    <div class="card">
+      <h2 class="mini-head">{{ '近 30 天熱門' if popular else '最新發布' }}</h2>
+      <ol class="rank-list">
+        {% for t in (popular or latest) %}
+          <li><a href="{{ url_for('public.teacher', code=t.teacher_code) }}">
+            <span class="rank-num" aria-hidden="true">{{ loop.index }}</span>
+            <span><strong>{{ t.teacher_name }}</strong><span class="muted small block">{{ t.school_name }}</span></span>
+          </a></li>
+        {% endfor %}
+      </ol>
+    </div>
+    <div class="card">
+      <h2 class="mini-head">精選數位課程</h2>
+      <ul class="rank-list">
+        {% for h in hot_courses %}
+          <li><a href="{{ url_for('public.teacher', code=h.teacher.teacher_code) }}#courses">
+            <span class="chip chip-sm">{{ h.course.subject or '課程' }}</span>
+            <span><strong>{{ h.course.title }}</strong><span class="muted small block">{{ h.teacher.teacher_name }}・{{ h.course.grade }}</span></span>
+          </a></li>
+        {% endfor %}
+      </ul>
+    </div>
+  </div>
+</section>
+{% endif %}
+
+<section class="container section" id="list">
+  <div class="section-head">
+    <h2>{{ '搜尋結果' if filtering else '教師列表' }}</h2>
+    <span class="muted">{{ teachers|length }} 位</span>
+  </div>
+  {% if teachers %}
+    <div class="teacher-grid">
+      {% for t in teachers %}{{ teacher_card(t) }}{% endfor %}
+    </div>
+  {% else %}
+    <div class="card empty">
+      <p>目前沒有符合條件的老師。</p>
+    </div>
+  {% endif %}
+</section>
+{% endblock %}

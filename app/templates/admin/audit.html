@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}操作紀錄｜{{ site_name }}{% endblock %}
+{% block body_class %}page-admin{% endblock %}
+{% block main %}
+<div class="container section">
+  <div class="page-head">
+    <div><h1>操作紀錄</h1><p class="muted">最近 300 筆（登入、密碼、發布、管理員操作等）</p></div>
+    <a class="btn btn-ghost" href="{{ url_for('admin.dashboard') }}">← 返回</a>
+  </div>
+  <div class="card table-card">
+    <table class="rtable">
+      <thead><tr><th>時間</th><th>操作者</th><th>動作</th><th>對象</th><th>IP</th></tr></thead>
+      <tbody>
+        {% for r in rows %}
+        <tr>
+          <td data-label="時間">{{ r.created_at|localtime('%Y-%m-%d %H:%M:%S') }}</td>
+          <td data-label="操作者">{{ r.username or '—' }}</td>
+          <td data-label="動作"><code>{{ r.action }}</code> {% if r.detail %}<span class="muted small">{{ r.detail }}</span>{% endif %}</td>
+          <td data-label="對象">{{ r.target or '' }}</td>
+          <td data-label="IP">{{ r.ip }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="5" class="muted center">尚無紀錄</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

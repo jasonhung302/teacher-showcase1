@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+{% import "macros.html" as m with context %}
+{% block title %}{{ '編輯教師帳號' if teacher else '新增教師' }}｜{{ site_name }}{% endblock %}
+{% block body_class %}page-admin{% endblock %}
+{% block main %}
+<div class="container narrow section">
+  <div class="page-head">
+    <h1>{{ '編輯教師帳號' if teacher else '新增教師' }}</h1>
+    <a class="btn btn-ghost" href="{{ url_for('admin.dashboard') }}">← 返回列表</a>
+  </div>
+
+  <form method="post" class="card" data-warn-unsaved>
+    {{ m.csrf() }}
+    <div class="form-grid">
+      <div class="field">
+        <label for="display_name">教師姓名 <span class="req">*</span></label>
+        <input id="display_name" name="display_name" value="{{ form.display_name or '' }}" maxlength="50" required>
+      </div>
+      <div class="field">
+        <label for="username">登入帳號 <span class="req">*</span></label>
+        <input id="username" name="username" value="{{ form.username or '' }}" maxlength="32" required
+               autocapitalize="none" spellcheck="false" placeholder="例：t005">
+      </div>
+      <div class="field">
+        <label for="teacher_code">公開網址代碼 <span class="req">*</span></label>
+        <input id="teacher_code" name="teacher_code" value="{{ form.teacher_code or '' }}" maxlength="20" required aria-describedby="code-hint">
+        <span class="hint" id="code-hint">公開頁網址為 /teacher/{{ form.teacher_code or '001' }}</span>
+      </div>
+      <div class="field">
+        <label for="email">帳號 Email（忘記密碼、提醒信用）</label>
+        <input id="email" name="email" type="email" value="{{ form.email or '' }}" maxlength="120">
+      </div>
+      {% if not teacher %}
+      <div class="field field-wide">
+        <label for="password">初始密碼（選填）</label>
+        <input id="password" name="password" type="text" autocomplete="off" maxlength="128" placeholder="留空將自動產生臨時密碼" aria-describedby="pw-hint">
+        <span class="hint" id="pw-hint">老師第一次登入時會被要求更改密碼。</span>
+      </div>
+      {% endif %}
+    </div>
+    <fieldset class="fieldset">
+      <legend>帳號有效期限（選填）</legend>
+      <div class="form-grid">
+        <div class="field">
+          <label for="valid_from">開始日期</label>
+          <input id="valid_from" name="valid_from" type="date" value="{{ form.valid_from or '' }}">
+        </div>
+        <div class="field">
+          <label for="valid_until">結束日期</label>
+          <input id="valid_until" name="valid_until" type="date" value="{{ form.valid_until or '' }}">
+        </div>
+        <div class="field field-wide">
+          <label class="check"><input type="checkbox" name="keep_public_after_expiry" value="1" {% if form.keep_public_after_expiry %}checked{% endif %}>
+            帳號到期後，已發布的公開頁仍然保留</label>
+          <span class="hint">期間外無法登入；空白代表不限期。</span>
+        </div>
+      </div>
+    </fieldset>
+    <div class="form-actions">
+      <button class="btn btn-primary" type="submit">{{ '儲存' if teacher else '建立帳號' }}</button>
+    </div>
+  </form>
+
+  {% if teacher %}
+  <div class="card">
+    <h2>帳號狀態</h2>
+    <dl class="kv">
+      <div><dt>狀態</dt><dd>{% if teacher.is_active %}<span class="badge badge-ok">啟用中</span>{% else %}<span class="badge badge-danger">已停用</span>{% endif %}</dd></div>
+      <div><dt>最後登入</dt><dd>{{ teacher.last_login_at|localtime if teacher.last_login_at else '從未登入' }}</dd></div>
+      <div><dt>發布狀態</dt><dd>{{ m.status_badge(teacher.status) }}</dd></div>
+      <div><dt>公開頁瀏覽</dt><dd>近 7 天 {{ views.d7 }}・近 30 天 {{ views.d30 }}・總計 {{ views.total }}</dd></div>
+    </dl>
+    <div class="form-actions">
+      <a class="btn btn-primary" href="{{ url_for('assist.overview', uid=teacher.id) }}">協助編輯教師資料</a>
+      {{ m.confirm_button(url_for('admin.teacher_reset_password', uid=teacher.id), '重設密碼',
+         '確定要重設「' ~ teacher.display_name ~ '」的密碼嗎？會產生新的臨時密碼並登出該老師。', 'btn btn-ghost') }}
+      {% if teacher.is_active %}
+        {{ m.confirm_button(url_for('admin.teacher_toggle', uid=teacher.id), '停用帳號',
+           '停用後老師無法登入，公開頁也會隱藏。確定嗎？', 'btn btn-ghost-danger', {'back': 'edit'}) }}
+      {% else %}
+        {{ m.confirm_button(url_for('admin.teacher_toggle', uid=teacher.id), '重新啟用',
+           '確定要重新啟用此帳號嗎？', 'btn btn-ghost', {'back': 'edit'}) }}
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>資料完成度 {{ pct }}%</h2>
+    {{ m.progress(pct) }}
+    <ul class="checklist checklist-compact">
+      {% for it in checklist %}
+        <li class="cl-item {{ 'cl-done' if it.done else ('cl-todo' if it.required else 'cl-optional') }}">
+          <span class="cl-icon" aria-hidden="true">{{ '✓' if it.done else ('!' if it.required else '○') }}</span>
+          <span class="cl-text"><span class="cl-label">{{ it.label }}{% if not it.required %}<span class="cl-tag">選填</span>{% endif %}</span>
+            {% if it.hint %}<span class="cl-hint">{{ it.hint }}</span>{% endif %}</span>
+        </li>
+      {% endfor %}
+    </ul>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,24 @@
+{% extends "editor/layout.html" %}
+{% block title %}編輯{{ cfg.label }}｜{{ site_name }}{% endblock %}
+{% block dash %}
+<div class="page-head"><h1>編輯{{ cfg.label }}</h1></div>
+<form method="post" enctype="multipart/form-data" class="card" data-warn-unsaved>
+  {{ m.csrf() }}
+  <div class="form-grid">
+    {% for f in cfg.fields %}{{ m.field(f, form) }}{% endfor %}
+    {% if cfg.proof %}
+      {% if proof %}
+        <div class="field field-wide">
+          <p class="small">目前證明文件：<a href="{{ url_for('public.file', name=proof.stored_name) }}" target="_blank" rel="noopener">{{ proof.original_name }}</a></p>
+          <label class="check"><input type="checkbox" name="remove_proof" value="1"> 移除證明文件</label>
+        </div>
+      {% endif %}
+      {{ m.file_input('proof', '上傳新的證明文件（選填，不公開）', '.jpg,.jpeg,.png,.pdf', 'JPG / PNG / PDF', 20) }}
+    {% endif %}
+  </div>
+  <div class="form-actions">
+    <button class="btn btn-primary" type="submit">儲存</button>
+    <a class="btn btn-ghost" href="{{ eurl('items', kind=kind) }}">取消</a>
+  </div>
+</form>
+{% endblock %}

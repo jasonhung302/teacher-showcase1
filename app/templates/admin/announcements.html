@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% import "macros.html" as m with context %}
+{% block title %}公告與截止日｜{{ site_name }}{% endblock %}
+{% block body_class %}page-admin{% endblock %}
+{% block main %}
+<div class="container narrow section">
+  <div class="page-head">
+    <h1>公告與截止日</h1>
+    <a class="btn btn-ghost" href="{{ url_for('admin.dashboard') }}">← 返回列表</a>
+  </div>
+
+  <form method="post" class="card">
+    {{ m.csrf() }}
+    <input type="hidden" name="action" value="deadline">
+    <h2>填寫截止日</h2>
+    <p class="small muted">設定後，老師總覽頁會顯示倒數天數，提醒信也會附上截止日。</p>
+    <div class="inline-fields">
+      <div class="field">
+        <label for="deadline">截止日</label>
+        <input id="deadline" name="deadline" type="date" value="{{ deadline or '' }}">
+      </div>
+      <button class="btn btn-primary" type="submit">儲存</button>
+    </div>
+  </form>
+
+  <form method="post" class="card" id="form" data-warn-unsaved>
+    {{ m.csrf() }}
+    {% if edit %}<input type="hidden" name="id" value="{{ edit.id }}">{% endif %}
+    <h2>{{ '編輯公告' if edit else '發布新公告' }}</h2>
+    <div class="form-grid">
+      <div class="field field-wide">
+        <label for="title">標題 <span class="req">*</span></label>
+        <input id="title" name="title" maxlength="100" required value="{{ edit.title if edit else '' }}">
+      </div>
+      <div class="field field-wide">
+        <label for="body">內容</label>
+        <textarea id="body" name="body" rows="4" maxlength="2000" data-count>{{ edit.body if edit and edit.body else '' }}</textarea>
+      </div>
+      <div class="field">
+        <label for="starts_on">開始日期</label>
+        <input id="starts_on" name="starts_on" type="date" value="{{ edit.starts_on if edit and edit.starts_on else '' }}">
+      </div>
+      <div class="field">
+        <label for="ends_on">結束日期</label>
+        <input id="ends_on" name="ends_on" type="date" value="{{ edit.ends_on if edit and edit.ends_on else '' }}">
+      </div>
+      <div class="field field-wide">
+        <label class="check"><input type="checkbox" name="is_pinned" value="1" {% if edit and edit.is_pinned %}checked{% endif %}> 置頂</label>
+        <span class="hint">日期空白代表立即顯示、不限期。</span>
+      </div>
+    </div>
+    <div class="form-actions">
+      <button class="btn btn-primary" type="submit">{{ '儲存' if edit else '發布公告' }}</button>
+      {% if edit %}<a class="btn btn-ghost" href="{{ url_for('admin.announcements') }}">取消</a>{% endif %}
+    </div>
+  </form>
+
+  <div class="card">
+    <h2>所有公告</h2>
+    {% if rows %}
+    <ul class="item-list">
+      {% for a in rows %}
+        {% set live = (not a.starts_on or a.starts_on <= today) and (not a.ends_on or a.ends_on >= today) %}
+        <li class="item-row">
+          <div class="item-main">
+            <strong>{% if a.is_pinned %}<span class="badge badge-info">置頂</span> {% endif %}{{ a.title }}</strong>
+            <span class="small muted">{{ a.starts_on or '立即' }} ～ {{ a.ends_on or '不限' }}・
+              {% if live %}<span class="text-ok">顯示中</span>{% elif a.starts_on and a.starts_on > today %}尚未開始{% else %}已結束{% endif %}</span>
+          </div>
+          <div class="item-actions">
+            <a class="btn btn-sm btn-ghost" href="{{ url_for('admin.announcements', edit=a.id) }}#form">編輯</a>
+            {{ m.confirm_button(url_for('admin.announcements'), '刪除', '確定刪除這則公告？', 'btn btn-sm btn-ghost-danger', {'action': 'delete', 'id': a.id}) }}
+          </div>
+        </li>
+      {% endfor %}
+    </ul>
+    {% else %}<p class="muted">尚無公告。</p>{% endif %}
+  </div>
+</div>
+{% endblock %}

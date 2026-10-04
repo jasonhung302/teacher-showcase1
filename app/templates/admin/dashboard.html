@@ -1,0 +1,138 @@
+{% extends "base.html" %}
+{% import "macros.html" as m with context %}
+{% block title %}管理後台｜{{ site_name }}{% endblock %}
+{% block body_class %}page-admin{% endblock %}
+{% block main %}
+<div class="container section">
+  <div class="page-head">
+    <div>
+      <h1>管理後台</h1>
+      <p class="muted small">
+        {% if deadline %}填寫截止日 <strong>{{ deadline }}</strong>｜{% endif %}
+        最近備份：{{ last_backup|localtime if last_backup else '尚未備份' }}
+      </p>
+    </div>
+    <div class="head-actions">
+      <a class="btn btn-primary" href="{{ url_for('admin.teacher_new') }}">＋ 新增教師</a>
+      <a class="btn btn-ghost" href="{{ url_for('admin.import_teachers') }}">批次匯入</a>
+      <details class="menu">
+        <summary class="btn btn-ghost">更多 ▾</summary>
+        <div class="menu-panel">
+          <a href="{{ url_for('admin.export_xlsx') }}">匯出完整 Excel</a>
+          <a href="{{ url_for('admin.export_csv') }}">匯出 CSV（會場手冊）</a>
+          <a href="{{ url_for('admin.announcements') }}">公告與截止日</a>
+          <a href="{{ url_for('admin.backups') }}">備份</a>
+          <a href="{{ url_for('admin.audit_log') }}">操作紀錄</a>
+        </div>
+      </details>
+    </div>
+  </div>
+
+  <div class="stat-grid stat-grid-8">
+    {% set cards = [
+      ('total', '教師總數', stats.total, ''), ('published', '已發布', stats.published, 'ok'),
+      ('unpublished', '尚未發布', stats.unpublished, ''), ('low', '完成度 < 50%', stats.low, 'warn'),
+      ('never', '尚未首次登入', stats.never, 'warn'), ('must_change', '待改密碼', stats.must_change, ''),
+      ('stale', '7 天以上未更新', stats.stale, ''), ('inactive', '已停用', stats.inactive, 'muted')] %}
+    {% for key, label, num, tone in cards %}
+      <a class="card stat stat-{{ tone }} {{ 'stat-active' if current.status == key or (key == 'total' and not current.status) }}"
+         href="{{ url_for('admin.dashboard', status='' if key == 'total' else key) }}">
+        <span class="stat-num">{{ num }}</span><span class="stat-label">{{ label }}</span>
+      </a>
+    {% endfor %}
+  </div>
+  <p class="small muted">啟用中教師平均完成度 {{ stats.avg }}%（只計算必填項目）。點擊卡片可快速篩選。</p>
+
+  <div class="card filter-card">
+    <div class="chip-filter" role="group" aria-label="快速篩選">
+      {% for key, label in filters %}
+        <a class="fchip {{ 'fchip-on' if current.status == key }}" href="{{ url_for('admin.dashboard', status=key, q=current.q or None) }}"
+           {% if current.status == key %}aria-current="true"{% endif %}>{{ label }} <span>{{ counts[key] }}</span></a>
+      {% endfor %}
+    </div>
+    <form class="filter-bar" method="get">
+      <input type="hidden" name="status" value="{{ current.status }}">
+      <div class="field">
+        <label for="q" class="sr-only">搜尋</label>
+        <input id="q" name="q" type="search" value="{{ current.q }}" placeholder="搜尋姓名、帳號、學校、代碼">
+      </div>
+      <button class="btn btn-primary" type="submit">搜尋</button>
+    </form>
+  </div>
+
+  <div class="card reminder-bar">
+    <div>
+      <strong>提醒名單</strong>
+      <span class="muted small">目前篩選共 {{ teachers|length }} 位{% if not current.status %}（建議先點「未完成」或「未發布」）{% endif %}</span>
+    </div>
+    <div class="form-actions">
+      <a class="btn btn-sm btn-ghost" href="{{ url_for('admin.reminders_csv', status=current.status or 'all', q=current.q or None) }}">匯出名單 CSV</a>
+      {% if smtp %}
+        <form method="post" action="{{ url_for('admin.reminders_send') }}" class="inline-form"
+              data-confirm="確定要寄提醒信給目前篩選的 {{ teachers|length }} 位老師嗎？（沒有 Email 的會略過）">
+          {{ m.csrf() }}
+          <input type="hidden" name="status" value="{{ current.status }}"><input type="hidden" name="q" value="{{ current.q }}">
+          <button class="btn btn-sm btn-primary" type="submit" {% if not teachers %}disabled{% endif %}>寄送提醒 Email</button>
+        </form>
+      {% else %}
+        <span class="small muted">設定 SMTP 後可直接寄送提醒信</span>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="card table-card">
+    <table class="rtable">
+      <caption class="sr-only">教師列表</caption>
+      <thead>
+        <tr><th scope="col">代碼</th><th scope="col">教師</th><th scope="col">學校</th><th scope="col">完成度／尚缺</th>
+            <th scope="col">狀態</th><th scope="col">最後更新</th><th scope="col">瀏覽</th><th scope="col">操作</th></tr>
+      </thead>
+      <tbody>
+        {% for t in teachers %}
+        <tr class="{{ 'row-inactive' if not t.is_active }}">
+          <td data-label="代碼"><code>{{ t.teacher_code }}</code></td>
+          <td data-label="教師">
+            <strong>{{ t.teacher_name or t.display_name }}</strong>
+            <span class="muted small block">帳號：{{ t.username }}</span>
+            <span class="tag-row">
+              {% if not t.is_active %}<span class="badge badge-danger">已停用</span>{% endif %}
+              {% if t.must_change_password %}<span class="badge badge-muted">待改密碼</span>{% endif %}
+              {% if not t.last_login_at %}<span class="badge badge-warn">未登入過</span>{% endif %}
+              {% if t.valid_until %}<span class="badge badge-muted">至 {{ t.valid_until }}</span>{% endif %}
+            </span>
+          </td>
+          <td data-label="學校">{{ t.county or '' }} {{ t.school_name or '—' }}</td>
+          <td data-label="完成度">
+            <div class="pct-cell">{{ m.progress(t.pct) }}<span>{{ t.pct }}%</span></div>
+            {% if t.missing %}
+              <details class="missing">
+                <summary>尚缺 {{ t.missing|length }} 項</summary>
+                <span class="small">{{ t.missing|join('、') }}</span>
+              </details>
+            {% endif %}
+          </td>
+          <td data-label="狀態">{{ m.status_badge(t.status, t.has_changes) }}</td>
+          <td data-label="最後更新">
+            {{ t.updated_at|localtime('%m-%d %H:%M') }}{% if t.stale %} <span class="badge badge-warn">久未更新</span>{% endif %}
+            <span class="muted small block">登入：{{ t.last_login_at|localtime('%m-%d %H:%M') if t.last_login_at else '從未' }}</span>
+          </td>
+          <td data-label="瀏覽" class="nowrap"><span class="small">7 天 <strong>{{ t.views.d7 }}</strong></span>
+            <span class="small block">30 天 <strong>{{ t.views.d30 }}</strong></span></td>
+          <td data-label="操作">
+            <div class="table-actions">
+              <a class="btn btn-sm btn-primary" href="{{ url_for('assist.overview', uid=t.id) }}">協助編輯</a>
+              <a class="btn btn-sm btn-ghost" href="{{ url_for('admin.teacher_edit', uid=t.id) }}">帳號</a>
+              {% if t.status == 'published' and t.is_active %}
+                <a class="btn btn-sm btn-ghost" href="{{ url_for('public.teacher', code=t.teacher_code) }}" target="_blank" rel="noopener">公開頁</a>
+              {% endif %}
+            </div>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="8" class="muted center">沒有符合條件的教師。</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

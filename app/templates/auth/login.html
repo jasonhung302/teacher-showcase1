@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}教師登入｜{{ site_name }}{% endblock %}
+{% block body_class %}page-auth{% endblock %}
+{% block main %}
+<section class="auth-wrap">
+  <div class="card auth-card">
+    <h1>教師登入</h1>
+    <p class="muted">請使用管理員提供的帳號密碼登入，維護您的個人資料與課程。</p>
+    <form method="post" novalidate>
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="field">
+        <label for="username">帳號</label>
+        <input id="username" name="username" type="text" value="{{ username }}" autocomplete="username"
+               autocapitalize="none" spellcheck="false" required autofocus>
+      </div>
+      <div class="field">
+        <label for="password">密碼</label>
+        <input id="password" name="password" type="password" autocomplete="current-password" required>
+      </div>
+      <button class="btn btn-primary btn-block" type="submit">登入</button>
+    </form>
+    <p class="auth-links"><a href="{{ url_for('auth.forgot_password') }}">忘記密碼？</a></p>
+  </div>
+</section>
+{% endblock %}

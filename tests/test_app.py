@@ -1,0 +1,359 @@
+"""權限與安全測試（只用 Python 標準函式庫 unittest，不需額外安裝）。
+
+執行：python -m unittest discover -s tests -v
+"""
+import io
+import json
+import os
+import re
+import shutil
+import tempfile
+import unittest
+
+from PIL import Image
+
+os.environ.setdefault("SECRET_KEY", "test-secret")
+
+from app import create_app                     # noqa: E402
+from app.security import forgot_limiter, login_limiter  # noqa: E402
+
+
+def png_bytes(size=(40, 30), color=(200, 30, 30)):
+    buf = io.BytesIO()
+    Image.new("RGB", size, color).save(buf, "PNG")
+    return buf.getvalue()
+
+
+def jpeg_with_exif():
+    buf = io.BytesIO()
+    img = Image.new("RGB", (50, 50), (10, 120, 200))
+    exif = Image.Exif()
+    exif[0x010F] = "SecretCameraMaker"
+    img.save(buf, "JPEG", exif=exif.tobytes())
+    return buf.getvalue()
+
+
+class Base(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.app = create_app({"TESTING": True, "INSTANCE_DIR": __import__("pathlib").Path(self.tmp),
+                               "DATABASE": __import__("pathlib").Path(self.tmp) / "t.db",
+                               "UPLOAD_FOLDER": __import__("pathlib").Path(self.tmp) / "uploads"})
+        login_limiter.reset()
+        forgot_limiter.reset()
+        with self.app.app_context():
+            from app.seed import seed
+            seed(self.app)
+        self.client = self.app.test_client()
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    # ---- helpers
+    def csrf(self, client=None, path="/login"):
+        client = client or self.client
+        html = client.get(path).get_data(as_text=True)
+        m = re.search(r'name="csrf_token" value="([^"]+)"', html)
+        return m.group(1) if m else None
+
+    def login(self, username, password="Demo1234", client=None):
+        client = client or self.client
+        token = self.csrf(client)
+        return client.post("/login", data={"username": username, "password": password, "csrf_token": token})
+
+    def post(self, path, data=None, client=None, csrf_from="/"):
+        client = client or self.client
+        data = dict(data or {})
+        data["csrf_token"] = self.csrf(client, csrf_from)
+        return client.post(path, data=data, content_type="multipart/form-data")
+
+    def db(self, sql, args=()):
+        from app.db import connect
+        conn = connect(self.app.config["DATABASE"])
+        rows = conn.execute(sql, args).fetchall()
+        conn.commit()
+        conn.close()
+        return rows
+
+    def uid(self, username):
+        return self.db("SELECT id FROM users WHERE username = ?", (username,))[0][0]
+
+    def course_of(self, username):
+        return self.db("SELECT c.id FROM courses c JOIN teacher_profiles p ON p.id = c.profile_id"
+                       " JOIN users u ON u.id = p.user_id WHERE u.username = ?", (username,))[0][0]
+
+
+class AuthTests(Base):
+    def test_password_is_hashed(self):
+        h = self.db("SELECT password_hash FROM users WHERE username='t001'")[0][0]
+        self.assertNotIn("Demo1234", h)
+        self.assertTrue(h.startswith(("scrypt:", "pbkdf2:")))
+
+    def test_login_success_and_logout(self):
+        r = self.login("t001")
+        self.assertEqual(r.status_code, 302)
+        self.assertIn("/dashboard", r.headers["Location"])
+        self.assertEqual(self.client.get("/dashboard/").status_code, 200)
+        self.post("/logout")
+        self.assertEqual(self.client.get("/dashboard/").status_code, 302)
+
+    def test_wrong_password_generic_message(self):
+        r = self.login("t001", "wrong-pass1")
+        self.assertEqual(r.status_code, 401)
+        r2 = self.login("nobody", "wrong-pass1")
+        self.assertEqual(r2.status_code, 401)
+
+    def test_account_lockout(self):
+        for _ in range(5):
+            self.login("t002", "bad-pass1")
+        r = self.login("t002", "Demo1234")          # 正確密碼也要被擋
+        self.assertEqual(r.status_code, 429)
+
+    def test_first_login_forces_password_change(self):
+        r = self.login("t004")
+        self.assertIn("/account/password", r.headers["Location"])
+        r = self.client.get("/dashboard/")
+        self.assertIn("/account/password", r.headers["Location"])
+        r = self.post("/account/password", {"current_password": "Demo1234", "new_password": "short",
+                                            "confirm_password": "short"}, csrf_from="/account/password")
+        self.assertEqual(r.status_code, 400)
+        r = self.post("/account/password", {"current_password": "Demo1234", "new_password": "NewPass2026",
+                                            "confirm_password": "NewPass2026"}, csrf_from="/account/password")
+        self.assertEqual(r.status_code, 302)
+        self.assertEqual(self.client.get("/dashboard/").status_code, 200)
+
+    def test_csrf_required(self):
+        r = self.client.post("/login", data={"username": "t001", "password": "Demo1234"})
+        self.assertEqual(r.status_code, 400)
+        self.login("t001")
+        r = self.client.post("/dashboard/publish")
+        self.assertEqual(r.status_code, 400)
+
+    def test_session_idle_timeout(self):
+        self.login("t001")
+        self.db("UPDATE sessions SET last_seen_at = '2000-01-01 00:00:00'")
+        r = self.client.get("/dashboard/")
+        self.assertEqual(r.status_code, 302)
+        self.assertIn("/login", r.headers["Location"])
+
+    def test_session_token_not_stored_in_plain(self):
+        self.login("t001")
+        cookie = self.client.get_cookie("ts_sid").value
+        stored = self.db("SELECT token_hash FROM sessions")[0][0]
+        self.assertNotEqual(cookie, stored)
+
+    def test_forgot_and_reset_password(self):
+        token = self.csrf(path="/forgot-password")
+        with self.assertLogs(self.app.logger, "WARNING") as logs:
+            self.client.post("/forgot-password", data={"identifier": "t001", "csrf_token": token})
+        link = re.search(r"(/reset-password/\S+)", "\n".join(logs.output)).group(1)
+        r = self.post(link, {"new_password": "Reset2026x", "confirm_password": "Reset2026x"}, csrf_from=link)
+        self.assertEqual(r.status_code, 302)
+        self.assertEqual(self.login("t001", "Reset2026x").status_code, 302)
+        # 連結只能用一次
+        r = self.client.get(link)
+        self.assertEqual(r.status_code, 302)
+
+    def test_open_redirect_blocked(self):
+        token = self.csrf()
+        r = self.client.post("/login?next=//evil.example.com", data={"username": "t001", "password": "Demo1234",
+                                                                      "csrf_token": token})
+        self.assertNotIn("evil", r.headers["Location"])
+
+
+class PermissionTests(Base):
+    def test_teacher_cannot_access_admin(self):
+        self.login("t001")
+        self.assertEqual(self.client.get("/admin/").status_code, 403)
+        self.assertEqual(self.client.get(f"/admin/teachers/{self.uid('t002')}/edit/").status_code, 403)
+        self.assertEqual(self.post(f"/admin/teachers/{self.uid('t002')}/reset-password").status_code, 403)
+
+    def test_teacher_cannot_touch_other_teachers_course(self):
+        self.login("t001")
+        other = self.course_of("t002")
+        self.assertEqual(self.client.get(f"/dashboard/courses/{other}/edit").status_code, 404)
+        r = self.post(f"/dashboard/courses/{other}/edit", {"title": "HACKED"})
+        self.assertEqual(r.status_code, 404)
+        r = self.post(f"/dashboard/courses/{other}/delete")
+        self.assertEqual(r.status_code, 404)
+        title = self.db("SELECT title FROM courses WHERE id = ?", (other,))[0][0]
+        self.assertNotEqual(title, "HACKED")
+
+    def test_teacher_cannot_touch_other_teachers_items(self):
+        self.login("t001")
+        exp = self.db("SELECT e.id FROM teaching_experiences e JOIN teacher_profiles p ON p.id = e.profile_id"
+                      " JOIN users u ON u.id = p.user_id WHERE u.username='t002'")[0][0]
+        self.assertEqual(self.post(f"/dashboard/items/experiences/{exp}/delete").status_code, 404)
+        self.assertEqual(len(self.db("SELECT 1 FROM teaching_experiences WHERE id = ?", (exp,))), 1)
+        photo = self.db("SELECT ph.id FROM teacher_photos ph JOIN teacher_profiles p ON p.id = ph.profile_id"
+                        " JOIN users u ON u.id = p.user_id WHERE u.username='t002'")[0][0]
+        self.assertEqual(self.post(f"/dashboard/photos/{photo}/delete").status_code, 404)
+
+    def test_unknown_item_kind_rejected(self):
+        self.login("t001")
+        self.assertEqual(self.client.get("/dashboard/items/users").status_code, 404)
+
+    def test_teacher_cannot_read_other_draft_files(self):
+        name = self.db("SELECT f.stored_name FROM uploaded_files f JOIN teacher_profiles p ON p.id=f.profile_id"
+                       " JOIN users u ON u.id=p.user_id WHERE u.username='t003'")[0][0]
+        self.assertEqual(self.client.get(f"/files/{name}").status_code, 404)        # 訪客
+        self.login("t001")
+        self.assertEqual(self.client.get(f"/files/{name}").status_code, 404)        # 其他老師
+        admin = self.app.test_client()
+        self.login("admin", "Admin1234", client=admin)
+        self.assertEqual(admin.get(f"/files/{name}").status_code, 200)               # 管理員
+
+    def test_admin_can_assist_edit(self):
+        self.login("admin", "Admin1234")
+        uid = self.uid("t002")
+        self.assertEqual(self.client.get(f"/admin/teachers/{uid}/edit/").status_code, 200)
+        cid = self.course_of("t002")
+        r = self.post(f"/admin/teachers/{uid}/edit/courses/{cid}/edit", {"title": "管理員修正後的課程"})
+        self.assertEqual(r.status_code, 302)
+        self.assertEqual(self.db("SELECT title FROM courses WHERE id=?", (cid,))[0][0], "管理員修正後的課程")
+        # 透過 t002 的網址也不能改 t001 的課程
+        r = self.post(f"/admin/teachers/{uid}/edit/courses/{self.course_of('t001')}/edit", {"title": "x"})
+        self.assertEqual(r.status_code, 404)
+
+    def test_admin_create_disable_reset(self):
+        self.login("admin", "Admin1234")
+        r = self.post("/admin/teachers/new", {"username": "t005", "display_name": "新老師", "teacher_code": "005"})
+        self.assertEqual(r.status_code, 200)
+        temp = re.search(r'class="secret">([^<]+)<', r.get_data(as_text=True)).group(1)
+        t = self.app.test_client()
+        self.assertIn("/account/password", self.login("t005", temp, client=t).headers["Location"])
+        uid = self.uid("t005")
+        self.post(f"/admin/teachers/{uid}/toggle-active")
+        self.assertEqual(t.get("/account/password").status_code, 302)     # 已被踢出
+        self.assertEqual(self.login("t005", temp, client=t).status_code, 401)
+
+    def test_disabled_teacher_page_hidden(self):
+        self.login("admin", "Admin1234")
+        self.post(f"/admin/teachers/{self.uid('t001')}/toggle-active")
+        self.assertEqual(self.app.test_client().get("/teacher/001").status_code, 404)
+
+
+class PublishTests(Base):
+    def test_private_contact_never_public(self):
+        html = self.client.get("/teacher/001").get_data(as_text=True)
+        self.assertIn("林怡君", html)
+        self.assertNotIn("0912-345-678", html)
+        self.assertNotIn("yijun.lin@example.edu.tw", html)
+        snap = self.db("SELECT published_snapshot FROM teacher_profiles WHERE teacher_code='001'")[0][0]
+        self.assertNotIn("0912", snap)
+        self.assertNotIn("phone", json.loads(snap))
+        # 預覽也不能出現
+        self.login("t001")
+        prev = self.client.get("/dashboard/preview").get_data(as_text=True)
+        self.assertNotIn("0912-345-678", prev)
+
+    def test_draft_edits_not_visible_until_publish(self):
+        self.login("t001")
+        self.post("/dashboard/profile", {"county": "新北市", "school_name": "新北市板橋區示範國民小學",
+                                         "teacher_name": "林怡君", "slogan": "全新的草稿標語"})
+        visitor = self.app.test_client()
+        self.assertNotIn("全新的草稿標語", visitor.get("/teacher/001").get_data(as_text=True))
+        self.assertIn("全新的草稿標語", self.client.get("/dashboard/preview").get_data(as_text=True))
+        self.post("/dashboard/publish")
+        self.assertIn("全新的草稿標語", visitor.get("/teacher/001").get_data(as_text=True))
+        self.post("/dashboard/unpublish")
+        self.assertEqual(visitor.get("/teacher/001").status_code, 404)
+        self.assertNotIn("林怡君", visitor.get("/").get_data(as_text=True))
+
+    def test_unpublished_teacher_not_listed(self):
+        html = self.client.get("/").get_data(as_text=True)
+        self.assertIn("林怡君", html)
+        self.assertNotIn("張雅婷", html)
+        self.assertEqual(self.client.get("/teacher/003").status_code, 404)
+
+    def test_xss_escaped(self):
+        self.login("t001")
+        payload = '<script>alert(1)</script>'
+        self.post("/dashboard/profile", {"county": "新北市", "school_name": "X", "teacher_name": "林怡君",
+                                         "philosophy": payload})
+        self.post("/dashboard/publish")
+        html = self.app.test_client().get("/teacher/001").get_data(as_text=True)
+        self.assertNotIn(payload, html)
+        self.assertIn("&lt;script&gt;", html)
+
+    def test_sql_injection_harmless(self):
+        r = self.client.get("/?q=' OR 1=1 --&county=x' OR '1'='1")
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(self.client.get("/teacher/001' OR '1'='1").status_code, 404)
+        self.login("t001")
+        self.post("/dashboard/items/specialties", {"name": "x'); DROP TABLE users; --"})
+        self.assertTrue(self.db("SELECT COUNT(*) FROM users")[0][0] > 0)
+
+    def test_search_filters(self):
+        html = self.client.get("/?county=臺中市").get_data(as_text=True)
+        self.assertIn("陳建宏", html)
+        self.assertNotIn("林怡君", html)
+        html = self.client.get("/?subject=數學").get_data(as_text=True)
+        self.assertIn("林怡君", html)
+        self.assertNotIn("陳建宏", html)
+
+
+class UploadTests(Base):
+    def setUp(self):
+        super().setUp()
+        self.login("t003")
+
+    def upload_photo(self, data, name):
+        return self.post("/dashboard/photos", {"photos": (io.BytesIO(data), name)})
+
+    def test_valid_png_saved_with_random_name(self):
+        self.upload_photo(png_bytes(), "../../etc/passwd.png")
+        row = self.db("SELECT stored_name, original_name FROM uploaded_files WHERE category='class_photo'")[-1]
+        self.assertRegex(row[0], r"^[0-9a-f]{32}\.png$")
+        self.assertNotIn("/", row[1])
+
+    def test_exif_removed(self):
+        self.upload_photo(jpeg_with_exif(), "a.jpg")
+        name = self.db("SELECT stored_name FROM uploaded_files WHERE category='class_photo'")[-1][0]
+        data = (self.app.config["UPLOAD_FOLDER"] / name).read_bytes()
+        self.assertNotIn(b"SecretCameraMaker", data)
+
+    def test_fake_image_rejected(self):
+        before = self.db("SELECT COUNT(*) FROM uploaded_files")[0][0]
+        self.upload_photo(b"<?php system($_GET['c']); ?>", "shell.png")
+        self.upload_photo(b"%PDF-1.4 not an image", "x.jpg")
+        self.upload_photo(png_bytes(), "x.gif")
+        self.assertEqual(self.db("SELECT COUNT(*) FROM uploaded_files")[0][0], before)
+
+    def test_image_size_limit(self):
+        self.app.config["IMAGE_MAX_BYTES"] = 100
+        before = self.db("SELECT COUNT(*) FROM uploaded_files")[0][0]
+        self.upload_photo(png_bytes((300, 300)), "big.png")
+        self.assertEqual(self.db("SELECT COUNT(*) FROM uploaded_files")[0][0], before)
+
+    def test_pdf_validation(self):
+        r = self.post("/dashboard/courses/new", {"title": "測試課程"})
+        cid = int(re.search(r"/courses/(\d+)/edit", r.headers["Location"]).group(1))
+        from app.seed import demo_pdf
+        self.post(f"/dashboard/courses/{cid}/plans", {"plan_type": "lesson_plan", "file": (io.BytesIO(demo_pdf("ok")), "教案.pdf")})
+        self.post(f"/dashboard/courses/{cid}/plans", {"plan_type": "lesson_plan", "file": (io.BytesIO(png_bytes()), "fake.pdf")})
+        bad = demo_pdf("x").replace(b"/Type /Catalog", b"/Type /Catalog /OpenAction << /S /JavaScript /JS (app.alert(1)) >>")
+        self.post(f"/dashboard/courses/{cid}/plans", {"plan_type": "lesson_plan", "file": (io.BytesIO(bad), "js.pdf")})
+        rows = self.db("SELECT original_name FROM uploaded_files WHERE category='lesson_plan' AND profile_id ="
+                       " (SELECT profile_id FROM courses WHERE id = ?)", (cid,))
+        self.assertEqual([r[0] for r in rows], ["教案.pdf"])
+
+    def test_deleted_file_kept_while_published_then_purged(self):
+        c = self.app.test_client()
+        self.login("t001", client=c)
+        photo_id, name = self.db("SELECT ph.id, f.stored_name FROM teacher_photos ph JOIN uploaded_files f ON f.id = ph.file_id"
+                                 " JOIN teacher_profiles p ON p.id = ph.profile_id WHERE p.teacher_code='001'")[0]
+        self.post(f"/dashboard/photos/{photo_id}/delete", client=c)
+        visitor = self.app.test_client()
+        self.assertEqual(visitor.get(f"/files/{name}").status_code, 200)   # 已發布版本仍可看
+        self.post("/dashboard/publish", client=c)
+        self.assertEqual(visitor.get(f"/files/{name}").status_code, 404)   # 重新發布後訪客看不到
+        # 仍被發布歷史引用（可還原）→ 實體檔暫時保留
+        self.assertTrue((self.app.config["UPLOAD_FOLDER"] / name).exists())
+        for _ in range(10):                                                # 超出保留的 10 個版本後清除
+            self.post("/dashboard/publish", client=c)
+        self.assertFalse((self.app.config["UPLOAD_FOLDER"] / name).exists())
+
+
+if __name__ == "__main__":
+    unittest.main()

@@ -1,0 +1,47 @@
+{% extends "editor/layout.html" %}
+{% block title %}{{ cfg.label }}｜{{ site_name }}{% endblock %}
+{% block dash %}
+<div class="page-head">
+  <div><h1>{{ cfg.label }}</h1><p class="small muted">拖曳 ☰ 調整公開頁上的顯示順序（也可以點 ☰ 後用鍵盤 ↑↓ 移動）</p></div>
+  <span class="save-status" data-save-status aria-live="polite"></span>
+</div>
+
+<div class="card">
+  {% if rows %}
+    <ul class="item-list sortable" data-reorder="{{ eurl('reorder', kind=kind) }}" aria-label="{{ cfg.label }}列表，可拖曳排序">
+      {% for r in rows %}
+        <li class="item-row" data-id="{{ r.id }}">
+          <button type="button" class="drag-handle" aria-label="移動「{{ r[cfg.title_field] }}」，按上下鍵調整順序">☰</button>
+          <div class="item-main">
+            <strong>{{ r[cfg.title_field] }}</strong>
+            <span class="muted small">
+              {% for f in cfg.fields[1:] if f.type != 'textarea' and r[f.name] %}{{ r[f.name] }}{% if not loop.last %}・{% endif %}{% endfor %}
+            </span>
+            {% if cfg.proof and r.proof_name %}
+              <a class="small" href="{{ url_for('public.file', name=r.proof_name) }}" target="_blank" rel="noopener">📎 證明文件（不公開）</a>
+            {% endif %}
+          </div>
+          <div class="item-actions">
+            <a class="btn btn-sm btn-ghost" href="{{ eurl('item_edit', kind=kind, item_id=r.id) }}">編輯</a>
+            {{ m.confirm_button(eurl('item_delete', kind=kind, item_id=r.id), '刪除', '確定要刪除這筆' ~ cfg.label ~ '嗎？') }}
+          </div>
+        </li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p class="empty-inline muted">尚未新增任何{{ cfg.label }}。</p>
+  {% endif %}
+</div>
+
+<form method="post" enctype="multipart/form-data" class="card" data-warn-unsaved>
+  {{ m.csrf() }}
+  <h2>新增{{ cfg.label }}</h2>
+  <div class="form-grid">
+    {% for f in cfg.fields %}{{ m.field(f, form) }}{% endfor %}
+    {% if cfg.proof %}
+      {{ m.file_input('proof', '證明文件（選填，不公開，僅供管理員審核）', '.jpg,.jpeg,.png,.pdf', 'JPG / PNG / PDF', 20) }}
+    {% endif %}
+  </div>
+  <div class="form-actions"><button class="btn btn-primary" type="submit">新增</button></div>
+</form>
+{% endblock %}
