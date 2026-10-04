@@ -2,8 +2,8 @@ services:
   web:
     build: .
     restart: unless-stopped
-    env_file: .env
     volumes:
-      - ./data:/data          # 資料庫與上傳檔（請納入備份）
+      - ./env.json:/app/env.json:ro   # 設定檔（容器內以 uid 10001 讀取，需給讀取權限）
+      - ./data:/data          # 上傳檔與備份（資料庫在 env.json 的 DATABASE_URL 所指的 PostgreSQL）
     ports:
       - "127.0.0.1:8000:8000" # 只開給本機 Nginx

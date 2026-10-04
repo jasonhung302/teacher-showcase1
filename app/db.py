@@ -1,10 +1,13 @@
-"""資料庫存取：只使用參數化查詢（? 佔位符），杜絕 SQL Injection。"""
-import sqlite3
+"""資料庫存取（PostgreSQL / psycopg 3）：只使用參數化查詢（%s 佔位符），杜絕 SQL Injection。"""
 from datetime import datetime, timedelta, timezone
 
+import psycopg
 from flask import current_app, g
+from psycopg.rows import dict_row
 
 TS_FORMAT = "%Y-%m-%d %H:%M:%S"
+# 啟動建表用的 advisory lock：多個 worker／執行個體同時啟動時，一次只讓一個執行 schema.sql
+SCHEMA_LOCK_ID = 7461001
 
 
 def now_utc():
@@ -32,17 +35,14 @@ def parse_ts(value):
     return datetime.strptime(value, TS_FORMAT).replace(tzinfo=timezone.utc)
 
 
-def connect(path):
-    conn = sqlite3.connect(str(path), timeout=10)
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA foreign_keys = ON")
-    conn.execute("PRAGMA busy_timeout = 5000")
-    return conn
+def connect(dsn):
+    """建立連線。採 autocommit：每個語句各自提交；多語句交易請用 `with conn.transaction():`。"""
+    return psycopg.connect(dsn, autocommit=True, row_factory=dict_row, connect_timeout=10)
 
 
 def get_db():
     if "db" not in g:
-        g.db = connect(current_app.config["DATABASE"])
+        g.db = connect(current_app.config["DATABASE_URL"])
     return g.db
 
 
@@ -53,71 +53,40 @@ def close_db(_exc=None):
 
 
 def query(sql, args=(), one=False):
-    cur = get_db().execute(sql, args)
-    rows = cur.fetchall()
-    cur.close()
+    rows = get_db().execute(sql, args or None).fetchall()
     return (rows[0] if rows else None) if one else rows
 
 
 def execute(sql, args=()):
-    db = get_db()
-    cur = db.execute(sql, args)
-    db.commit()
-    return cur.lastrowid
+    return get_db().execute(sql, args or None).rowcount
 
 
-# 舊版資料庫升級：只「新增」欄位，絕不刪除或改動既有資料。
-# 新資料表由 schema.sql 的 CREATE TABLE IF NOT EXISTS 自動建立。
-MIGRATION_COLUMNS = [
-    ("users", "prev_login_at", "TEXT"),
-    ("users", "valid_from", "TEXT"),
-    ("users", "valid_until", "TEXT"),
-    ("users", "keep_public_after_expiry", "INTEGER NOT NULL DEFAULT 1"),
-    ("uploaded_files", "thumb_name", "TEXT"),
-]
-
-
-def _migrate(conn):
-    for table, column, decl in MIGRATION_COLUMNS:
-        cols = {r[1] for r in conn.execute(f"PRAGMA table_info({table})")}
-        if column not in cols:
-            conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {decl}")
-    conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_files_thumb ON uploaded_files(thumb_name)")
-    # 舊版已發布的老師：把目前公開版本寫入發布歷史，之後才能還原
-    conn.execute(
-        "INSERT INTO publish_history (profile_id, snapshot, published_at)"
-        " SELECT id, published_snapshot, published_at FROM teacher_profiles p"
-        " WHERE status = 'published' AND published_snapshot IS NOT NULL AND published_at IS NOT NULL"
-        " AND NOT EXISTS (SELECT 1 FROM publish_history h WHERE h.profile_id = p.id)")
+def insert(sql, args=()):
+    """執行 INSERT 並回傳新資料列的 id（PostgreSQL 沒有 lastrowid，改用 RETURNING）。"""
+    return get_db().execute(sql + " RETURNING id", args or None).fetchone()["id"]
 
 
 def init_db(app):
+    if not app.config.get("DATABASE_URL"):
+        raise RuntimeError("未設定 DATABASE_URL：請在 env.json 或環境變數指定 PostgreSQL 連線字串（見 env.example.json）")
     app.config["INSTANCE_DIR"].mkdir(parents=True, exist_ok=True)
     app.config["UPLOAD_FOLDER"].mkdir(parents=True, exist_ok=True)
-    conn = connect(app.config["DATABASE"])
+    with app.open_resource("schema.sql") as f:
+        schema = f.read().decode("utf-8")
+    conn = connect(app.config["DATABASE_URL"])
     try:
-        conn.execute("PRAGMA journal_mode = WAL")
-        # 先補欄位再跑 schema（schema 裡的索引可能用到新欄位）
-        existing = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
-        if "users" in existing:
-            for table, column, decl in MIGRATION_COLUMNS:
-                if table in existing:
-                    cols = {r[1] for r in conn.execute(f"PRAGMA table_info({table})")}
-                    if column not in cols:
-                        conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {decl}")
-        with app.open_resource("schema.sql") as f:
-            conn.executescript(f.read().decode("utf-8"))
-        _migrate(conn)
-        conn.commit()
+        with conn.transaction():
+            conn.execute("SELECT pg_advisory_xact_lock(%s)", (SCHEMA_LOCK_ID,))
+            conn.execute(schema)      # 不帶參數 → 可一次執行整份 schema（多個語句）
     finally:
         conn.close()
 
 
 def get_setting(key, default=None):
-    row = query("SELECT value FROM settings WHERE key = ?", (key,), one=True)
+    row = query("SELECT value FROM settings WHERE key = %s", (key,), one=True)
     return row["value"] if row and row["value"] is not None else default
 
 
 def set_setting(key, value):
-    execute("INSERT INTO settings (key, value) VALUES (?, ?)"
+    execute("INSERT INTO settings (key, value) VALUES (%s, %s)"
             " ON CONFLICT(key) DO UPDATE SET value = excluded.value", (key, value))

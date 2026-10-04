@@ -7,7 +7,7 @@ After=network.target
 User=teacher
 Group=teacher
 WorkingDirectory=/opt/teacher-showcase
-EnvironmentFile=/opt/teacher-showcase/.env
+# 設定由程式啟動時自行讀取 /opt/teacher-showcase/env.json
 ExecStart=/opt/teacher-showcase/.venv/bin/gunicorn --workers 1 --threads 8 --bind 127.0.0.1:8000 wsgi:app
 Restart=always
 NoNewPrivileges=true

@@ -1,6 +1,7 @@
 instance/
 data/
 .env
+env.json
 .venv/
 __pycache__/
 *.pyc

@@ -14,7 +14,7 @@ from .security import (apply_auth_cookie, check_csrf, csrf_token, enforce_passwo
 
 def _backfill_thumbs(app):
     from .uploads import backfill_thumbnails
-    conn = dbmod.connect(app.config["DATABASE"])
+    conn = dbmod.connect(app.config["DATABASE_URL"])
     try:
         backfill_thumbnails(conn, app.config["UPLOAD_FOLDER"])
     except Exception:      # noqa: BLE001 — 縮圖失敗不影響網站啟動
