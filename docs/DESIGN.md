@@ -1,7 +1,7 @@
 # 系統設計文件
 
 教師個人資料與數位課程展示網站系統（Teacher Showcase）
-技術：Python 3.10+ / Flask 3 / SQLite / Jinja2 伺服器端渲染 / 原生 CSS + 少量 JS
+技術：Python 3.10+ / Flask 3 / PostgreSQL（psycopg 3）/ Jinja2 伺服器端渲染 / 原生 CSS + 少量 JS
 
 > 本文件對應需求書第 15 點的 1–9 項；10–13 項（程式碼、安裝、測試帳號、部署）見 `README.md`。
 
@@ -34,7 +34,7 @@
 │  └─────────────┘ └──────────────┘ └────────────┘ └─────────────────┘  │
 └───────────────┬─────────────────────────┬────────────────────────────┘
           ┌─────▼─────┐             ┌─────▼──────────────┐
-          │ SQLite DB │             │ instance/uploads/  │（不在 static，經權限檢查才送出）
+          │ PostgreSQL│             │ instance/uploads/  │（不在 static，經權限檢查才送出）
           └───────────┘             └────────────────────┘
 ```
 
@@ -389,14 +389,14 @@ teacher-showcase/
 │   │   │              announcements, backups, audit
 │   │   └── errors/    error
 │   └── static/  css/style.css  js/app.js  img/favicon.svg
-├── tests/                   64 項自動化測試（test_app.py 權限安全、test_v2.py 第二版功能）
+├── tests/                   65 項自動化測試（test_app.py 權限安全、test_v2.py 第二版功能）
 ├── deploy/                  nginx.conf、teacher-showcase.service、backup.sh
 ├── docs/DESIGN.md           本文件
-├── instance/                （執行時產生）app.db、uploads/
+├── instance/                （執行時產生）uploads/、backups/（資料庫在 PostgreSQL）
 ├── run.py                   開發啟動
 ├── wsgi.py                  正式環境入口
 ├── requirements.txt
-├── Dockerfile  docker-compose.yml  .env.example
+├── Dockerfile  docker-compose.yml  env.example.json
 └── README.md
 ```
 
@@ -466,7 +466,7 @@ erDiagram
 - 縮圖檔名 `t_<uuid>.webp`，存取時查回原圖再套用原圖的公開／私有規則。
 - 瀏覽統計不記錄個人資料：只累加每日次數；以 Cookie 記錄「今天看過哪些代碼」避免重複計算；排除爬蟲、老師本人與管理員。
 - CSP 新增 `img-src blob:`（瀏覽器端裁切預覽）；仍禁止 inline script。
-- 備份還原前自動另存 `before-restore-*.zip`；zip 內容只接受 `app.db` 與 `uploads/<安全檔名>`。
+- 備份還原前自動另存 `before-restore-*.zip`；zip 內容只接受 `db/<資料表>.csv` 與 `uploads/<安全檔名>`。
 
 ## D. 前端
 - 全部為原生 JavaScript（`app/static/js/app.js`），沒有外部 CDN，符合 CSP。

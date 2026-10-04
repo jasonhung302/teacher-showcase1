@@ -58,7 +58,7 @@ def create_login_session(user_id):
     token = secrets.token_urlsafe(32)
     execute(
         "INSERT INTO sessions (token_hash, user_id, created_at, last_seen_at, expires_at, ip, user_agent)"
-        " VALUES (?, ?, ?, ?, ?, ?, ?)",
+        " VALUES (%s, %s, %s, %s, %s, %s, %s)",
         (sha256(token), user_id, ts(), ts(),
          ts_in(hours=current_app.config["SESSION_ABSOLUTE_HOURS"]),
          client_ip(), (request.user_agent.string or "")[:255]),
@@ -71,7 +71,7 @@ def create_login_session(user_id):
 def destroy_current_session():
     token = request.cookies.get(current_app.config["AUTH_COOKIE_NAME"])
     if token:
-        execute("DELETE FROM sessions WHERE token_hash = ?", (sha256(token),))
+        execute("DELETE FROM sessions WHERE token_hash = %s", (sha256(token),))
     g.clear_auth_cookie = True
     session.clear()
 
@@ -80,9 +80,9 @@ def destroy_user_sessions(user_id, keep_current=False):
     """密碼變更、重設、停用帳號時，踢出該使用者所有登入裝置。"""
     if keep_current and request.cookies.get(current_app.config["AUTH_COOKIE_NAME"]):
         current = sha256(request.cookies[current_app.config["AUTH_COOKIE_NAME"]])
-        execute("DELETE FROM sessions WHERE user_id = ? AND token_hash != ?", (user_id, current))
+        execute("DELETE FROM sessions WHERE user_id = %s AND token_hash != %s", (user_id, current))
     else:
-        execute("DELETE FROM sessions WHERE user_id = ?", (user_id,))
+        execute("DELETE FROM sessions WHERE user_id = %s", (user_id,))
 
 
 def load_logged_in_user():
@@ -94,7 +94,7 @@ def load_logged_in_user():
         return
     row = query(
         "SELECT s.id AS sid, s.last_seen_at, s.expires_at, u.* FROM sessions s"
-        " JOIN users u ON u.id = s.user_id WHERE s.token_hash = ?",
+        " JOIN users u ON u.id = s.user_id WHERE s.token_hash = %s",
         (sha256(token),), one=True,
     )
     if row is None:
@@ -107,12 +107,12 @@ def load_logged_in_user():
             or (now - last_seen).total_seconds() > idle_limit
             or not row["is_active"]
             or not _window_ok(row)):
-        execute("DELETE FROM sessions WHERE id = ?", (row["sid"],))
+        execute("DELETE FROM sessions WHERE id = %s", (row["sid"],))
         g.clear_auth_cookie = True
         g.session_expired = bool(row["is_active"])
         return
     if (now - last_seen).total_seconds() > 60:   # 降低寫入頻率
-        execute("UPDATE sessions SET last_seen_at = ? WHERE id = ?", (ts(now), row["sid"]))
+        execute("UPDATE sessions SET last_seen_at = %s WHERE id = %s", (ts(now), row["sid"]))
     g.user = row
 
 
@@ -202,7 +202,7 @@ def audit(action, target=None, detail=None, actor_id=None):
     if actor_id is None and getattr(g, "user", None) is not None:
         actor_id = g.user["id"]
     execute(
-        "INSERT INTO audit_logs (actor_id, action, target, detail, ip, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+        "INSERT INTO audit_logs (actor_id, action, target, detail, ip, created_at) VALUES (%s, %s, %s, %s, %s, %s)",
         (actor_id, action, target, (detail or "")[:500], client_ip(), ts()),
     )
 

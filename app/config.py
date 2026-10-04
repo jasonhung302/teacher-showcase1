@@ -1,23 +1,38 @@
-"""系統設定：全部可用環境變數覆寫（見 .env.example）。"""
+"""系統設定：全部可用環境變數覆寫（見 env.example.json）。"""
+import json
 import os
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent.parent
+ENV_JSON_PATH = BASE_DIR / "env.json"
 
 
-def _load_dotenv(path):
-    """讀取專案根目錄的 .env（不需額外套件）；已存在的環境變數優先。"""
+def _load_json_env(path: Path) -> None:
+    """讀取專案根目錄的 env.json 並寫入環境變數；已存在的環境變數優先。
+
+    格式同 Azure App Service 應用程式設定的「進階編輯」：
+    [{"name": "SECRET_KEY", "value": "...", "slotSetting": false}, ...]
+    """
     if not path.is_file():
         return
-    for line in path.read_text(encoding="utf-8").splitlines():
-        line = line.strip()
-        if not line or line.startswith("#") or "=" not in line:
+    try:
+        settings = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        # 格式錯誤時直接中止，避免正式機默默用預設值（例如隨機 SECRET_KEY）啟動
+        raise RuntimeError(f"{path.name} 不是合法的 JSON：{exc}") from exc
+    if not isinstance(settings, list):
+        raise RuntimeError(f"{path.name} 最外層必須是陣列（每筆含 name、value）")
+    for item in settings:
+        if not isinstance(item, dict) or "name" not in item:
+            raise RuntimeError(f"{path.name} 的每一筆都必須是含 name 與 value 的物件")
+        val = item.get("value")
+        if val is None:
             continue
-        key, _, val = line.partition("=")
-        os.environ.setdefault(key.strip(), val.strip().strip('"').strip("'"))
+        # slotSetting 只有 Azure 用得到，本機讀取時忽略
+        os.environ.setdefault(str(item["name"]), str(val))
 
 
-_load_dotenv(BASE_DIR / ".env")
+_load_json_env(ENV_JSON_PATH)
 
 
 def _bool(name, default=False):
@@ -41,8 +56,11 @@ class Config:
     # 正式環境一定要設定一組長隨機字串，否則每次重啟 Session 都會失效
     SECRET_KEY = os.environ.get("SECRET_KEY") or os.urandom(32).hex()
 
+    # PostgreSQL 連線字串（必填），例：postgresql://user:password@host:5432/dbname?sslmode=require
+    DATABASE_URL = os.environ.get("DATABASE_URL", "")
+
+    # 上傳檔與備份的存放位置（資料庫本身在 PostgreSQL）
     INSTANCE_DIR = Path(os.environ.get("INSTANCE_DIR", BASE_DIR / "instance"))
-    DATABASE = Path(os.environ.get("DATABASE_PATH", INSTANCE_DIR / "app.db"))
     UPLOAD_FOLDER = Path(os.environ.get("UPLOAD_FOLDER", INSTANCE_DIR / "uploads"))
 
     # ---- 上傳限制 ----

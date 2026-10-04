@@ -91,17 +91,17 @@ COURSE_FIELDS = [
 
 
 def touch_profile(profile_id):
-    execute("UPDATE teacher_profiles SET updated_at = ? WHERE id = ?", (ts(), profile_id))
+    execute("UPDATE teacher_profiles SET updated_at = %s WHERE id = %s", (ts(), profile_id))
 
 
 def get_profile_by_user(user_id):
-    return query("SELECT * FROM teacher_profiles WHERE user_id = ?", (user_id,), one=True)
+    return query("SELECT * FROM teacher_profiles WHERE user_id = %s", (user_id,), one=True)
 
 
 def _file_name(file_id):
     if not file_id:
         return None
-    row = query("SELECT stored_name FROM uploaded_files WHERE id = ? AND deleted_at IS NULL", (file_id,), one=True)
+    row = query("SELECT stored_name FROM uploaded_files WHERE id = %s AND deleted_at IS NULL", (file_id,), one=True)
     return row["stored_name"] if row else None
 
 
@@ -109,18 +109,18 @@ def load_items(kind, profile_id):
     table = ITEM_TYPES[kind]["table"]
     sql = (f"SELECT t.*, f.stored_name AS proof_name, f.original_name AS proof_original "
            f"FROM {table} t LEFT JOIN uploaded_files f ON f.id = t.proof_file_id "
-           f"WHERE t.profile_id = ? ORDER BY t.sort_order, t.id") if ITEM_TYPES[kind].get("proof") else \
-          f"SELECT * FROM {table} WHERE profile_id = ? ORDER BY sort_order, id"
+           f"WHERE t.profile_id = %s ORDER BY t.sort_order, t.id") if ITEM_TYPES[kind].get("proof") else \
+          f"SELECT * FROM {table} WHERE profile_id = %s ORDER BY sort_order, id"
     return query(sql, (profile_id,))
 
 
 def load_courses(profile_id):
     courses = []
-    for c in query("SELECT * FROM courses WHERE profile_id = ? ORDER BY sort_order, id", (profile_id,)):
+    for c in query("SELECT * FROM courses WHERE profile_id = %s ORDER BY sort_order, id", (profile_id,)):
         plans = query(
             "SELECT lp.*, f.stored_name, f.original_name, f.size_bytes FROM lesson_plans lp"
             " JOIN uploaded_files f ON f.id = lp.file_id"
-            " WHERE lp.course_id = ? AND lp.profile_id = ? ORDER BY lp.plan_type, lp.id",
+            " WHERE lp.course_id = %s AND lp.profile_id = %s ORDER BY lp.plan_type, lp.id",
             (c["id"], profile_id))
         courses.append({**dict(c), "plans": [dict(p) for p in plans]})
     return courses
@@ -129,19 +129,19 @@ def load_courses(profile_id):
 def load_photos(profile_id):
     return query("SELECT p.*, f.stored_name, f.thumb_name FROM teacher_photos p"
                  " JOIN uploaded_files f ON f.id = p.file_id"
-                 " WHERE p.profile_id = ? ORDER BY p.sort_order, p.id", (profile_id,))
+                 " WHERE p.profile_id = %s ORDER BY p.sort_order, p.id", (profile_id,))
 
 
 def _file_row(file_id):
     if not file_id:
         return None
-    return query("SELECT stored_name, thumb_name FROM uploaded_files WHERE id = ? AND deleted_at IS NULL",
+    return query("SELECT stored_name, thumb_name FROM uploaded_files WHERE id = %s AND deleted_at IS NULL",
                  (file_id,), one=True)
 
 
 def build_public_snapshot(profile_id):
     """產生可公開的資料（預覽與發布共用同一份邏輯，所見即所得）。"""
-    p = query("SELECT * FROM teacher_profiles WHERE id = ?", (profile_id,), one=True)
+    p = query("SELECT * FROM teacher_profiles WHERE id = %s", (profile_id,), one=True)
     files = []
 
     def ref(name):
@@ -196,9 +196,9 @@ def build_public_snapshot(profile_id):
 
 
 def publish_problems(profile_id):
-    p = query("SELECT * FROM teacher_profiles WHERE id = ?", (profile_id,), one=True)
+    p = query("SELECT * FROM teacher_profiles WHERE id = %s", (profile_id,), one=True)
     missing = [label for name, label, _m, req in PROFILE_FIELDS if req and not (p[name] or "").strip()]
-    if not query("SELECT 1 FROM courses WHERE profile_id = ? LIMIT 1", (profile_id,)):
+    if not query("SELECT 1 FROM courses WHERE profile_id = %s LIMIT 1", (profile_id,)):
         missing.append("至少一門數位學習課程")
     return missing
 
@@ -209,25 +209,25 @@ HISTORY_KEEP = 10
 def publish(profile_id, actor_id=None):
     snap = json.dumps(build_public_snapshot(profile_id), ensure_ascii=False)
     now = ts()
-    execute("UPDATE teacher_profiles SET status = 'published', published_snapshot = ?, published_at = ?,"
-            " updated_at = ? WHERE id = ?", (snap, now, now, profile_id))
-    execute("INSERT INTO publish_history (profile_id, snapshot, published_at, published_by) VALUES (?, ?, ?, ?)",
+    execute("UPDATE teacher_profiles SET status = 'published', published_snapshot = %s, published_at = %s,"
+            " updated_at = %s WHERE id = %s", (snap, now, now, profile_id))
+    execute("INSERT INTO publish_history (profile_id, snapshot, published_at, published_by) VALUES (%s, %s, %s, %s)",
             (profile_id, snap, now, actor_id))
     # 只保留最近 N 個版本
-    execute("DELETE FROM publish_history WHERE profile_id = ? AND id NOT IN"
-            " (SELECT id FROM publish_history WHERE profile_id = ? ORDER BY id DESC LIMIT ?)",
+    execute("DELETE FROM publish_history WHERE profile_id = %s AND id NOT IN"
+            " (SELECT id FROM publish_history WHERE profile_id = %s ORDER BY id DESC LIMIT %s)",
             (profile_id, profile_id, HISTORY_KEEP))
 
 
 def restore_version(profile_id, history_id, actor_id=None):
     """把公開頁換回某個歷史版本（只影響訪客看到的內容，不會覆蓋目前草稿）。"""
-    row = query("SELECT * FROM publish_history WHERE id = ? AND profile_id = ?", (history_id, profile_id), one=True)
+    row = query("SELECT * FROM publish_history WHERE id = %s AND profile_id = %s", (history_id, profile_id), one=True)
     if row is None:
         return False
     now = ts()
-    execute("UPDATE teacher_profiles SET status = 'published', published_snapshot = ?, published_at = ?"
-            " WHERE id = ?", (row["snapshot"], now, profile_id))
-    execute("INSERT INTO publish_history (profile_id, snapshot, published_at, published_by) VALUES (?, ?, ?, ?)",
+    execute("UPDATE teacher_profiles SET status = 'published', published_snapshot = %s, published_at = %s"
+            " WHERE id = %s", (row["snapshot"], now, profile_id))
+    execute("INSERT INTO publish_history (profile_id, snapshot, published_at, published_by) VALUES (%s, %s, %s, %s)",
             (profile_id, row["snapshot"], now, actor_id))
     return True
 
@@ -235,7 +235,7 @@ def restore_version(profile_id, history_id, actor_id=None):
 def publish_history(profile_id):
     rows = query("SELECT h.id, h.published_at, h.snapshot, u.display_name AS by_name, u.role AS by_role"
                  " FROM publish_history h LEFT JOIN users u ON u.id = h.published_by"
-                 " WHERE h.profile_id = ? ORDER BY h.id DESC", (profile_id,))
+                 " WHERE h.profile_id = %s ORDER BY h.id DESC", (profile_id,))
     out = []
     for r in rows:
         snap = json.loads(r["snapshot"])
@@ -246,8 +246,8 @@ def publish_history(profile_id):
 
 
 def unpublish(profile_id):
-    execute("UPDATE teacher_profiles SET status = 'draft', published_snapshot = NULL, updated_at = ?"
-            " WHERE id = ?", (ts(), profile_id))
+    execute("UPDATE teacher_profiles SET status = 'draft', published_snapshot = NULL, updated_at = %s"
+            " WHERE id = %s", (ts(), profile_id))
 
 
 def has_unpublished_changes(p):
@@ -256,12 +256,12 @@ def has_unpublished_changes(p):
 
 def checklist(profile_id):
     """可操作的完成度清單：每一項都有『必填／選填』與『前往填寫』的連結目標。"""
-    p = query("SELECT * FROM teacher_profiles WHERE id = ?", (profile_id,), one=True)
+    p = query("SELECT * FROM teacher_profiles WHERE id = %s", (profile_id,), one=True)
 
     def has(table):
-        return bool(query(f"SELECT 1 FROM {table} WHERE profile_id = ? LIMIT 1", (profile_id,)))
+        return bool(query(f"SELECT 1 FROM {table} WHERE profile_id = %s LIMIT 1", (profile_id,)))
 
-    courses = query("SELECT * FROM courses WHERE profile_id = ?", (profile_id,))
+    courses = query("SELECT * FROM courses WHERE profile_id = %s", (profile_id,))
     basic_missing = [label for name, label in (("county", "縣市"), ("school_name", "學校全銜"),
                                                ("teacher_name", "講師姓名"), ("job_title", "職稱"))
                      if not p[name]]

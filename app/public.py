@@ -79,7 +79,7 @@ def _published_or_404(code):
         abort(404)
     row = query(
         "SELECT p.id, p.user_id, p.published_snapshot FROM teacher_profiles p JOIN users u ON u.id = p.user_id"
-        f" WHERE p.teacher_code = ? AND p.status = 'published' AND {PUBLIC_VISIBLE_SQL}",
+        f" WHERE p.teacher_code = %s AND p.status = 'published' AND {PUBLIC_VISIBLE_SQL}",
         (code, local_today()), one=True)
     if row is None or not row["published_snapshot"]:
         abort(404)   # 草稿、未發布、已停用、已到期：一律當作不存在
@@ -119,7 +119,7 @@ def file(name):
     is_thumb = name.startswith("t_")
     f = query("SELECT f.*, p.user_id AS owner_id, p.status, p.published_snapshot, u.is_active, u.valid_until,"
               " u.keep_public_after_expiry FROM uploaded_files f JOIN teacher_profiles p ON p.id = f.profile_id"
-              " JOIN users u ON u.id = p.user_id WHERE " + ("f.thumb_name = ?" if is_thumb else "f.stored_name = ?"),
+              " JOIN users u ON u.id = p.user_id WHERE " + ("f.thumb_name = %s" if is_thumb else "f.stored_name = %s"),
               (name,), one=True)
     if f is None:
         abort(404)

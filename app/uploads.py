@@ -9,7 +9,7 @@ import uuid
 from flask import current_app, g
 from PIL import Image, ImageOps, UnidentifiedImageError
 
-from .db import execute, query, ts
+from .db import execute, insert, query, ts
 
 IMAGE_EXTS = {"jpg", "jpeg", "png"}
 PDF_EXTS = {"pdf"}
@@ -120,9 +120,9 @@ def save_upload(file_storage, category, profile_id):
     _write_new(folder / stored_name, data)
     thumb = make_thumbnail(data) if kind == "image" else None
 
-    return execute(
+    return insert(
         "INSERT INTO uploaded_files (profile_id, uploaded_by, category, stored_name, original_name,"
-        " mime_type, size_bytes, thumb_name, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        " mime_type, size_bytes, thumb_name, created_at) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)",
         (profile_id, g.user["id"] if g.get("user") else None, category, stored_name,
          original, mime, len(data), thumb, ts()),
     )
@@ -156,17 +156,16 @@ def make_thumbnail(data, folder=None):
 
 
 def backfill_thumbnails(conn, folder):
-    """舊版上傳的圖片沒有縮圖：啟動時補做一次（只處理缺少的）。"""
+    """替還沒有縮圖的圖片補做縮圖（啟動時與建立示範資料後執行，只處理缺少的）。"""
     rows = conn.execute("SELECT id, stored_name FROM uploaded_files"
                         " WHERE thumb_name IS NULL AND mime_type IN ('image/jpeg', 'image/png')").fetchall()
-    for fid, name in rows:
-        path = folder / name
+    for row in rows:
+        path = folder / row["stored_name"]
         if not path.is_file():
             continue
         thumb = make_thumbnail(path.read_bytes(), folder)
         if thumb:
-            conn.execute("UPDATE uploaded_files SET thumb_name = ? WHERE id = ?", (thumb, fid))
-    conn.commit()
+            conn.execute("UPDATE uploaded_files SET thumb_name = %s WHERE id = %s", (thumb, row["id"]))
 
 
 def published_file_names():
@@ -183,7 +182,7 @@ def discard_file(file_id):
     """草稿中移除檔案：先軟刪除，若沒有已發布頁面在用就立即清掉實體檔。"""
     if not file_id:
         return
-    execute("UPDATE uploaded_files SET deleted_at = ? WHERE id = ? AND deleted_at IS NULL", (ts(), file_id))
+    execute("UPDATE uploaded_files SET deleted_at = %s WHERE id = %s AND deleted_at IS NULL", (ts(), file_id))
     purge_deleted_files()
 
 
@@ -201,4 +200,4 @@ def purge_deleted_files():
         except OSError:
             current_app.logger.exception("刪除檔案失敗 %s", path)
             continue
-        execute("DELETE FROM uploaded_files WHERE id = ?", (row["id"],))
+        execute("DELETE FROM uploaded_files WHERE id = %s", (row["id"],))

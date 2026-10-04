@@ -7,8 +7,8 @@ import uuid
 import click
 from PIL import Image, ImageDraw
 
-from .db import connect, local_today, ts
-from .profiles import build_public_snapshot
+from .db import execute, get_db, insert, local_today, query, ts
+from .profiles import publish
 from .security import hash_password
 
 PALETTES = [((222, 236, 247), (30, 96, 145)), ((252, 238, 214), (196, 120, 22)),
@@ -144,8 +144,8 @@ TEACHERS = [
 
 
 def seed(app):
-    conn = connect(app.config["DATABASE"])
-    if conn.execute("SELECT COUNT(*) FROM users").fetchone()[0]:
+    db = get_db()
+    if query("SELECT 1 FROM users LIMIT 1"):
         raise click.ClickException("資料庫已有使用者，為避免覆蓋，已停止建立示範資料。")
     folder = app.config["UPLOAD_FOLDER"]
     folder.mkdir(parents=True, exist_ok=True)
@@ -153,89 +153,81 @@ def seed(app):
     def store(pid, uid, category, data, ext, mime, original):
         name = f"{uuid.uuid4().hex}.{ext}"
         (folder / name).write_bytes(data)
-        return conn.execute("INSERT INTO uploaded_files (profile_id, uploaded_by, category, stored_name, original_name,"
-                            " mime_type, size_bytes, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                            (pid, uid, category, name, original, mime, len(data), ts())).lastrowid
+        return insert("INSERT INTO uploaded_files (profile_id, uploaded_by, category, stored_name, original_name,"
+                      " mime_type, size_bytes, created_at) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
+                      (pid, uid, category, name, original, mime, len(data), ts()))
 
-    with conn:
-        conn.execute("INSERT INTO users (username, password_hash, role, display_name, email, is_active,"
-                     " must_change_password, created_at, updated_at) VALUES (?, ?, 'admin', ?, ?, 1, 0, ?, ?)",
-                     ("admin", hash_password("Admin1234"), "系統管理員", "admin@example.edu.tw", ts(), ts()))
+    with db.transaction():
+        execute("INSERT INTO users (username, password_hash, role, display_name, email, is_active,"
+                " must_change_password, created_at, updated_at) VALUES (%s, %s, 'admin', %s, %s, 1, 0, %s, %s)",
+                ("admin", hash_password("Admin1234"), "系統管理員", "admin@example.edu.tw", ts(), ts()))
         for idx, t in enumerate(TEACHERS):
             p = t["profile"]
-            uid = conn.execute(
+            uid = insert(
                 "INSERT INTO users (username, password_hash, role, display_name, email, is_active,"
-                " must_change_password, created_at, updated_at) VALUES (?, ?, 'teacher', ?, ?, 1, ?, ?, ?)",
+                " must_change_password, created_at, updated_at) VALUES (%s, %s, 'teacher', %s, %s, 1, %s, %s, %s)",
                 (t["username"], hash_password("Demo1234"), p["teacher_name"], p.get("contact_email") or None,
-                 t["must_change"], ts(), ts())).lastrowid
+                 t["must_change"], ts(), ts()))
             cols = list(p.keys())
-            pid = conn.execute(
+            pid = insert(
                 f"INSERT INTO teacher_profiles (user_id, teacher_code, {', '.join(cols)}, created_at, updated_at)"
-                f" VALUES (?, ?, {', '.join('?' * len(cols))}, ?, ?)",
-                [uid, t["code"]] + [p[c] or None for c in cols] + [ts(), ts()]).lastrowid
+                f" VALUES (%s, %s, {', '.join(['%s'] * len(cols))}, %s, %s)",
+                [uid, t["code"]] + [p[c] or None for c in cols] + [ts(), ts()])
             if idx < 3:
                 aid = store(pid, uid, "avatar", avatar_png(idx), "png", "image/png", "avatar.png")
-                conn.execute("UPDATE teacher_profiles SET avatar_file_id = ? WHERE id = ?", (aid, pid))
+                execute("UPDATE teacher_profiles SET avatar_file_id = %s WHERE id = %s", (aid, pid))
             if t["courses"]:
                 for k in range(3):
                     fid = store(pid, uid, "class_photo", classroom_png(idx * 3 + k), "png", "image/png", f"class{k}.png")
-                    conn.execute("INSERT INTO teacher_photos (profile_id, file_id, caption, sort_order, created_at)"
-                                 " VALUES (?, ?, ?, ?, ?)", (pid, fid, ["小組協作討論", "平板即時回饋", "成果發表"][k], k, ts()))
+                    execute("INSERT INTO teacher_photos (profile_id, file_id, caption, sort_order, created_at)"
+                            " VALUES (%s, %s, %s, %s, %s)", (pid, fid, ["小組協作討論", "平板即時回饋", "成果發表"][k], k, ts()))
             for i, r in enumerate(t["educations"]):
-                conn.execute("INSERT INTO educations (profile_id, school, department, degree, period, sort_order, created_at)"
-                             " VALUES (?, ?, ?, ?, ?, ?, ?)", (pid, *r, i, ts()))
+                execute("INSERT INTO educations (profile_id, school, department, degree, period, sort_order, created_at)"
+                        " VALUES (%s, %s, %s, %s, %s, %s, %s)", (pid, *r, i, ts()))
             for i, r in enumerate(t["experiences"]):
-                conn.execute("INSERT INTO teaching_experiences (profile_id, organization, role, period, description,"
-                             " sort_order, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)", (pid, *r, i, ts()))
+                execute("INSERT INTO teaching_experiences (profile_id, organization, role, period, description,"
+                        " sort_order, created_at) VALUES (%s, %s, %s, %s, %s, %s, %s)", (pid, *r, i, ts()))
             for i, r in enumerate(t["specialties"]):
-                conn.execute("INSERT INTO specialties (profile_id, name, description, sort_order, created_at)"
-                             " VALUES (?, ?, ?, ?, ?)", (pid, *r, i, ts()))
+                execute("INSERT INTO specialties (profile_id, name, description, sort_order, created_at)"
+                        " VALUES (%s, %s, %s, %s, %s)", (pid, *r, i, ts()))
             for i, r in enumerate(t["awards"]):
-                conn.execute("INSERT INTO awards (profile_id, title, issuer, award_date, description, sort_order, created_at)"
-                             " VALUES (?, ?, ?, ?, ?, ?, ?)", (pid, *r, i, ts()))
+                execute("INSERT INTO awards (profile_id, title, issuer, award_date, description, sort_order, created_at)"
+                        " VALUES (%s, %s, %s, %s, %s, %s, %s)", (pid, *r, i, ts()))
             for i, r in enumerate(t["certifications"]):
-                conn.execute("INSERT INTO certifications (profile_id, name, issuer, cert_date, description, sort_order,"
-                             " created_at) VALUES (?, ?, ?, ?, ?, ?, ?)", (pid, *r, i, ts()))
+                execute("INSERT INTO certifications (profile_id, name, issuer, cert_date, description, sort_order,"
+                        " created_at) VALUES (%s, %s, %s, %s, %s, %s, %s)", (pid, *r, i, ts()))
             for i, c in enumerate(t["courses"]):
                 names = list(c.keys())
-                cid = conn.execute(f"INSERT INTO courses ({', '.join(names)}, profile_id, sort_order, created_at, updated_at)"
-                                   f" VALUES ({', '.join('?' * len(names))}, ?, ?, ?, ?)",
-                                   [c[n] for n in names] + [pid, i, ts(), ts()]).lastrowid
+                cid = insert(f"INSERT INTO courses ({', '.join(names)}, profile_id, sort_order, created_at, updated_at)"
+                             f" VALUES ({', '.join(['%s'] * len(names))}, %s, %s, %s, %s)",
+                             [c[n] for n in names] + [pid, i, ts(), ts()])
                 for ptype, title in (("lesson_plan", "完整教案"), ("material", "學習單")):
                     fid = store(pid, uid, ptype, demo_pdf(f"{t['code']} {ptype}"), "pdf", "application/pdf",
                                 f"{c['title']}_{title}.pdf")
-                    conn.execute("INSERT INTO lesson_plans (profile_id, course_id, file_id, title, plan_type, created_at)"
-                                 " VALUES (?, ?, ?, ?, ?, ?)", (pid, cid, fid, title, ptype, ts()))
-    conn.close()
+                    execute("INSERT INTO lesson_plans (profile_id, course_id, file_id, title, plan_type, created_at)"
+                            " VALUES (%s, %s, %s, %s, %s, %s)", (pid, cid, fid, title, ptype, ts()))
 
     # 補縮圖，再用正式的發布函式發布，確保與線上行為一致（也會寫入發布歷史）
-    from .db import get_db
-    from .profiles import publish
     from .uploads import backfill_thumbnails
-    c2 = connect(app.config["DATABASE"])
-    backfill_thumbnails(c2, folder)
-    c2.close()
-    db = get_db()
+    backfill_thumbnails(db, folder)
     for t in TEACHERS:
         if t["publish"]:
-            pid = db.execute("SELECT p.id FROM teacher_profiles p JOIN users u ON u.id = p.user_id WHERE u.username = ?",
-                             (t["username"],)).fetchone()[0]
-            publish(pid)
+            publish(query("SELECT p.id FROM teacher_profiles p JOIN users u ON u.id = p.user_id WHERE u.username = %s",
+                          (t["username"],), one=True)["id"])
     # 示範公告與少量瀏覽數（讓總覽與後台的統計有東西可看）
     from datetime import datetime, timedelta
     today = datetime.strptime(local_today(), "%Y-%m-%d")
-    db.execute("INSERT INTO announcements (title, body, starts_on, ends_on, is_pinned, created_at, updated_at)"
-               " VALUES (?, ?, NULL, NULL, 1, ?, ?)",
-               ("歡迎使用教師數位課程展示平台", "請於截止日前完成基本資料、課堂照片與至少一門數位課程，"
-                "並記得按下「發布」。如有問題請聯繫承辦人。", ts(), ts()))
-    db.execute("INSERT INTO settings (key, value) VALUES ('deadline', ?)",
-               ((today + timedelta(days=21)).strftime("%Y-%m-%d"),))
+    execute("INSERT INTO announcements (title, body, starts_on, ends_on, is_pinned, created_at, updated_at)"
+            " VALUES (%s, %s, NULL, NULL, 1, %s, %s)",
+            ("歡迎使用教師數位課程展示平台", "請於截止日前完成基本資料、課堂照片與至少一門數位課程，"
+             "並記得按下「發布」。如有問題請聯繫承辦人。", ts(), ts()))
+    execute("INSERT INTO settings (key, value) VALUES ('deadline', %s)",
+            ((today + timedelta(days=21)).strftime("%Y-%m-%d"),))
     rnd = random.Random(7)
     for code in ("001", "002"):
-        pid = db.execute("SELECT id FROM teacher_profiles WHERE teacher_code = ?", (code,)).fetchone()[0]
+        pid = query("SELECT id FROM teacher_profiles WHERE teacher_code = %s", (code,), one=True)["id"]
         for d in range(30):
             day = (today - timedelta(days=d)).strftime("%Y-%m-%d")
-            db.execute("INSERT INTO page_views (profile_id, day, views) VALUES (?, ?, ?)",
-                       (pid, day, rnd.randint(0, 9 if code == "001" else 4)))
-    db.commit()
+            execute("INSERT INTO page_views (profile_id, day, views) VALUES (%s, %s, %s)",
+                    (pid, day, rnd.randint(0, 9 if code == "001" else 4)))
     click.echo("示範資料建立完成：admin / Admin1234，老師 t001–t004 / Demo1234（t004 首次登入需改密碼）")

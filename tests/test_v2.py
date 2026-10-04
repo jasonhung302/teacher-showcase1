@@ -37,7 +37,7 @@ class AutosaveTests(Base):
         self.assertTrue(r.get_json()["ok"])
         r = self.post(f"/dashboard/autosave/course/{other}", {"title": "HACK"})
         self.assertEqual(r.status_code, 404)
-        self.assertNotEqual(self.db("SELECT title FROM courses WHERE id=?", (other,))[0][0], "HACK")
+        self.assertNotEqual(self.db("SELECT title FROM courses WHERE id=%s", (other,))[0][0], "HACK")
 
 
 class ReorderTests(Base):
@@ -248,7 +248,7 @@ class ValidityTests(Base):
         self.assertEqual(r.status_code, 400)        # 結束早於開始
         self.post(f"/admin/teachers/{uid}", {"username": "t003", "display_name": "張雅婷", "teacher_code": "003",
                                              "valid_until": "2030-12-31"}, csrf_from="/admin/")
-        self.assertEqual(self.db("SELECT valid_until FROM users WHERE id=?", (uid,))[0][0], "2030-12-31")
+        self.assertEqual(self.db("SELECT valid_until FROM users WHERE id=%s", (uid,))[0][0], "2030-12-31")
 
 
 class AnnouncementTests(Base):
@@ -309,13 +309,21 @@ class BackupTests(Base):
         r = self.client.get(f"/admin/backups/{name}")
         self.assertEqual(r.status_code, 200)
         with zipfile.ZipFile(io.BytesIO(r.data)) as zf:
-            self.assertIn("app.db", zf.namelist())
+            self.assertIn("db/users.csv", zf.namelist())
             self.assertTrue(any(n.startswith("uploads/") for n in zf.namelist()))
-        self.assertEqual(self.client.get("/admin/backups/../app.db").status_code, 404)
+        self.assertEqual(self.client.get("/admin/backups/../db/users.csv").status_code, 404)
         # 還原：先改資料，再還原回備份時的狀態
         self.db("UPDATE teacher_profiles SET slogan='備份後改的' WHERE teacher_code='001'")
         restore_backup(self.app.config, self.app.config["INSTANCE_DIR"] / "backups" / name)
         self.assertNotEqual(self.db("SELECT slogan FROM teacher_profiles WHERE teacher_code='001'")[0][0], "備份後改的")
+        # 還原後自動編號要接在既有 id 之後，新增資料不可撞號
+        self.db("INSERT INTO announcements (title, created_at, updated_at) VALUES ('還原後新增', '-', '-')")
+        self.assertEqual(self.db("SELECT COUNT(*) FROM announcements")[0][0], 2)
+
+    def test_backup_covers_every_table(self):
+        from app.backup import TABLES
+        tables = {r[0] for r in self.db("SELECT tablename FROM pg_tables WHERE schemaname = current_schema()")}
+        self.assertEqual(set(TABLES), tables)
 
     def test_teacher_cannot_download_backup(self):
         self.login("t001")
@@ -357,28 +365,3 @@ class PublicPageTests(Base):
         sm = self.client.get("/sitemap.xml").get_data(as_text=True)
         self.assertIn("/teacher/001", sm)
         self.assertNotIn("/teacher/003", sm)
-
-
-class MigrationTests(Base):
-    def test_old_database_upgrades_in_place(self):
-        """模擬第一版資料庫：移除新欄位與新資料表後重新啟動，資料應完整保留並自動升級。"""
-        import sqlite3
-        from app import create_app
-        path = self.app.config["DATABASE"]
-        conn = sqlite3.connect(path)
-        conn.executescript("""
-            DROP TABLE publish_history; DROP TABLE page_views; DROP TABLE announcements; DROP TABLE settings;
-            DROP INDEX IF EXISTS idx_files_thumb;
-            ALTER TABLE users DROP COLUMN prev_login_at; ALTER TABLE users DROP COLUMN valid_from;
-            ALTER TABLE users DROP COLUMN valid_until; ALTER TABLE users DROP COLUMN keep_public_after_expiry;
-            ALTER TABLE uploaded_files DROP COLUMN thumb_name;
-        """)
-        conn.commit()
-        conn.close()
-        app2 = create_app({"TESTING": True, "INSTANCE_DIR": self.app.config["INSTANCE_DIR"],
-                           "DATABASE": path, "UPLOAD_FOLDER": self.app.config["UPLOAD_FOLDER"]})
-        c = app2.test_client()
-        self.assertIn("林怡君", c.get("/teacher/001").get_data(as_text=True))
-        self.assertEqual(self.db("SELECT COUNT(*) FROM publish_history")[0][0], 2)
-        self.assertEqual(self.db("SELECT COUNT(*) FROM uploaded_files WHERE thumb_name IS NULL"
-                                 " AND mime_type LIKE 'image/%'")[0][0], 0)
