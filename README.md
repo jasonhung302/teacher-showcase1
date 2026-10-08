@@ -2,7 +2,7 @@
 
 給約 25 位老師使用的教師個人資料與數位課程展示平台。每位老師有獨立帳號，只能管理自己的資料；填寫完成、預覽、發布後，系統自動產生一頁式公開網站（`/teacher/001`）。管理員可管理所有帳號、查看完成度與發布狀態，並在必要時協助修改。
 
-**登入、Session、資料庫、權限、上傳驗證全部由後端實作**，並附 64 項自動化測試驗證越權存取、CSRF、XSS、SQL Injection、上傳攻擊、草稿外洩、批次匯入、備份還原與舊資料庫升級等情境。
+**登入、Session、資料庫、權限、上傳驗證全部由後端實作**，並附 65 項自動化測試驗證越權存取、CSRF、XSS、SQL Injection、上傳攻擊、草稿外洩、批次匯入、備份還原等情境。
 
 ## 第二版新增功能（v2）
 
@@ -29,14 +29,13 @@
 | | **發布紀錄**：保留最近 10 次發布，可一鍵還原為先前的公開版本（不影響草稿） |
 | | 老師可看到自己的上次登入時間；無障礙改善（鍵盤操作、焦點管理、對比度 AA） |
 
-### 從第一版升級（保留所有老師資料）
-1. **先備份**：關掉網站，把整個 `instance` 資料夾複製一份。
-2. 用新版覆蓋 `app\`、`tests\`、`docs\`、`deploy\` 與根目錄的 `.py`、`requirements.txt`、`README.md`，**不要動 `instance\` 和 `.env`**。
-3. 安裝新套件：`pip install -r requirements.txt`
-4. 啟動網站：`python run.py`。第一次啟動會**自動升級資料庫**（只新增欄位與資料表）並為舊照片補做縮圖，不需要另外執行任何指令。
+### 資料庫：PostgreSQL
+- 資料存放在 PostgreSQL（連線字串以 `DATABASE_URL` 設定），網站與資料庫可以分開部署；上傳檔與備份仍放在 `INSTANCE_DIR`。
+- 第一次啟動會自動建立所有資料表，不需要另外執行建表指令。
+- 舊版使用 SQLite（`instance/app.db`）。本版**不會**自動匯入舊的 SQLite 資料，舊版的備份 zip 也無法還原到 PostgreSQL。
 
 - 設計文件（功能架構、頁面架構、流程、ERD、欄位、API、前端設計、權限設計、資料夾結構）：[`docs/DESIGN.md`](docs/DESIGN.md)
-- 技術：Python 3.10+、Flask 3、SQLite、Jinja2、Pillow；前端為原生 CSS/JS，無需 Node.js 或建置步驟
+- 技術：Python 3.10+、Flask 3、PostgreSQL（psycopg 3）、Jinja2、Pillow；前端為原生 CSS/JS，無需 Node.js 或建置步驟
 
 ---
 
@@ -49,7 +48,8 @@ python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 
-cp .env.example .env               # 修改 SECRET_KEY
+createdb teacher_showcase       # 需要一個 PostgreSQL 資料庫（本機或遠端皆可）
+cp env.example.json env.json    # 修改 SECRET_KEY、DATABASE_URL（本機例：postgresql://localhost/teacher_showcase）
 flask --app wsgi seed-demo         # 建立示範帳號與資料（只能在空資料庫執行）
 python run.py                      # 開啟 http://127.0.0.1:5000
 ```
@@ -60,7 +60,7 @@ cd teacher-showcase
 py -m venv .venv
 .venv\Scripts\Activate.ps1
 pip install -r requirements.txt
-copy .env.example .env
+copy env.example.json env.json
 flask --app wsgi seed-demo
 python run.py
 ```
@@ -72,7 +72,10 @@ flask --app wsgi create-admin --username admin --name "系統管理員"
 接著登入 `/admin/` 逐一新增 25 位老師帳號，系統會產生臨時密碼（只顯示一次，可列印交給老師）。
 
 ### 執行測試
+測試需要一個 PostgreSQL 測試資料庫；每個測試會在裡面建立專屬的 schema，結束後自動刪除。
 ```bash
+createdb teacher_showcase_test
+# 預設連 postgresql://localhost/teacher_showcase_test，可用 TEST_DATABASE_URL 指定其他資料庫
 python -m unittest discover -s tests -t . -v
 ```
 
@@ -84,27 +87,6 @@ python -m unittest discover -s tests -t . -v
 | `flask --app wsgi purge-sessions` | 清除過期 Session（可放 cron） |
 | `flask --app wsgi backup` | 建立備份（存在 `instance/backups/`，保留最近 14 份） |
 | `flask --app wsgi restore-backup <zip>` | 從備份還原（請先停止網站；目前資料會先自動另存） |
-
----
-
-## 12. 測試帳號（`seed-demo` 建立）
-
-| 角色 | 帳號 | 密碼 | 狀態 |
-|---|---|---|---|
-| 管理員 | `admin` | `Admin1234` | |
-| 教師 | `t001` | `Demo1234` | 林怡君・新北市・**已發布**，資料完整（完成度 100%） |
-| 教師 | `t002` | `Demo1234` | 陳建宏・臺中市・**已發布** |
-| 教師 | `t003` | `Demo1234` | 張雅婷・臺南市・**草稿**（公開頁 404） |
-| 教師 | `t004` | `Demo1234` | 黃志明・**首次登入**，會被要求先改密碼 |
-
-建議試用順序：
-1. 以 `t001` 登入 → 修改 Slogan → 開另一個無痕視窗看 `/teacher/001`，確認訪客仍看到舊版 → 預覽 → 重新發布。
-2. 以 `t001` 登入後，手動把網址改成 `t002` 的課程 `/dashboard/courses/2/edit` → 得到 404。
-3. 以 `t001` 開 `/admin/` → 403。
-4. 以 `admin` 登入 → 對 `t003` 按「協助編輯」→ 補資料並發布。
-5. 以 `t004` 登入 → 體驗首次改密碼流程。
-
-> ⚠️ 示範密碼僅供測試，正式上線請勿執行 `seed-demo`，或上線前刪除 `instance/app.db` 重新建立。
 
 忘記密碼：未設定 SMTP 時，重設連結會印在伺服器終端機的 log 中，方便測試。
 
@@ -120,11 +102,12 @@ sudo mkdir -p /opt/teacher-showcase && sudo chown teacher: /opt/teacher-showcase
 # 上傳專案到 /opt/teacher-showcase 後：
 sudo -u teacher bash -c 'cd /opt/teacher-showcase && python3 -m venv .venv && .venv/bin/pip install -r requirements.txt'
 
-# 2. 設定 .env（重要）
-#    SECRET_KEY=<python -c "import secrets;print(secrets.token_hex(32))">
-#    COOKIE_SECURE=1   TRUST_PROXY=1   BASE_URL=https://你的網域   SMTP_*
-sudo -u teacher cp .env.example .env && sudo -u teacher nano .env
-sudo chmod 600 /opt/teacher-showcase/.env
+# 2. 設定 env.json（重要）
+#    格式：[{"name": "SECRET_KEY", "value": "...", "slotSetting": false}, ...]（同 Azure App Service 進階編輯）
+#    SECRET_KEY 以 python -c "import secrets;print(secrets.token_hex(32))" 產生
+#    COOKIE_SECURE=1、TRUST_PROXY=1、BASE_URL=https://你的網域、DATABASE_URL、SMTP_*
+sudo -u teacher cp env.example.json env.json && sudo -u teacher nano env.json
+sudo chmod 600 /opt/teacher-showcase/env.json
 
 # 3. 建立管理員
 sudo -u teacher bash -c 'cd /opt/teacher-showcase && .venv/bin/flask --app wsgi create-admin --username admin'
@@ -145,18 +128,46 @@ sudo -u teacher crontab -e    # 15 2 * * * /opt/teacher-showcase/deploy/backup.s
 
 ### 方案 B：Docker
 ```bash
-cp .env.example .env     # 設定 SECRET_KEY、COOKIE_SECURE=1、BASE_URL
+cp env.example.json env.json     # 設定 SECRET_KEY、COOKIE_SECURE、BASE_URL；容器以 uid 10001 讀取，需 chmod 644 或 chown 10001
 docker compose up -d --build
 docker compose exec web flask --app wsgi create-admin --username admin
 ```
-資料庫與上傳檔存在 `./data/`，前面同樣接 Nginx（`deploy/nginx.conf`）提供 HTTPS。
+上傳檔與備份存在 `./data/`；資料庫是 `env.json` 的 `DATABASE_URL` 所指的 PostgreSQL（容器必須連得到）。前面同樣接 Nginx（`deploy/nginx.conf`）提供 HTTPS。
 
 ### 方案 C：Windows Server（學校機房常見）
 ```powershell
 pip install -r requirements.txt      # Windows 會自動安裝 waitress
 waitress-serve --host 127.0.0.1 --port 8000 wsgi:app
 ```
-前面以 IIS（ARR 反向代理）或 Nginx for Windows 提供 HTTPS，`.env` 設 `TRUST_PROXY=1`、`COOKIE_SECURE=1`，並以「工作排程器」設成開機自動啟動。
+前面以 IIS（ARR 反向代理）或 Nginx for Windows 提供 HTTPS，`env.json` 設 `TRUST_PROXY=1`、`COOKIE_SECURE=1`，並以「工作排程器」設成開機自動啟動。
+
+### 方案 D：Azure App Service + Azure Database for PostgreSQL
+網站與資料庫分開：App Service 跑網站，資料放在 Azure Database for PostgreSQL（Flexible Server）。
+
+1. **資料庫**：建立 Flexible Server（Burstable B1ms 即可）與資料庫 `teacher_showcase`；「網路」允許 App Service 連入（勾選允許 Azure 服務存取，或使用 VNet 整合）。
+2. **App Service**：建立 Linux、Python 3.12 的 Web App 並部署程式碼（`az webapp up`、GitHub Actions 或 zip 部署皆可）。
+3. **環境變數**（設定 → 環境變數；不需要 `env.json`，環境變數優先）：
+
+   | 名稱 | 值 |
+   |---|---|
+   | `DATABASE_URL` | `postgresql://帳號:密碼@伺服器名稱.postgres.database.azure.com:5432/teacher_showcase?sslmode=require`（密碼含 `@ : / #` 等字元需做 URL 編碼） |
+   | `SECRET_KEY` | 長隨機字串 |
+   | `INSTANCE_DIR` | `/home/data`（`/home` 是 App Service 的持久儲存；放在別處的上傳檔會在重啟或重新部署後消失） |
+   | `COOKIE_SECURE`、`TRUST_PROXY` | `1` |
+   | `BASE_URL` | 正式網址 |
+   | `SCM_DO_BUILD_DURING_DEPLOYMENT` | `true`（部署時自動 `pip install -r requirements.txt`） |
+
+4. **啟動命令**（設定 → 組態 → 啟動命令）：
+   ```bash
+   gunicorn --workers 1 --threads 8 --bind 0.0.0.0:8000 --access-logfile - wsgi:app
+   ```
+5. **建立管理員**：在自己的電腦執行，直接連到 Azure 的資料庫（資料庫防火牆需暫時加入你的 IP）：
+   ```bash
+   DATABASE_URL="postgresql://…?sslmode=require" flask --app wsgi create-admin --username admin
+   ```
+
+- 改用 `Dockerfile` 以容器部署時，另外設定 `WEBSITES_PORT=8000` 與 `WEBSITES_ENABLE_APP_SERVICE_STORAGE=true`（後者讓 `/home` 持久化）。
+- 後台的「備份」會存到 `/home/data/backups/`，內容包含資料庫與上傳檔；建議定期下載一份到其他地方。
 
 ### 上線檢查清單
 - [ ] `SECRET_KEY` 為長隨機字串（未設定時每次重啟所有人都會被登出）
@@ -165,10 +176,11 @@ waitress-serve --host 127.0.0.1 --port 8000 wsgi:app
 - [ ] SMTP 已設定（否則老師忘記密碼需由管理員重設）
 - [ ] Nginx `client_max_body_size` ≥ PDF 上限 + 2 MB
 - [ ] 已設定每日備份（`deploy/backup.sh` 或 Windows 工作排程器執行 `python -m flask --app wsgi backup`），並定期把備份檔複製到其他地方
-- [ ] `.env` 的 `BASE_URL` 已設為正式網址（QR Code、分享連結、社群預覽圖都會用到）
-- [ ] gunicorn 維持單一 worker（SQLite 寫入），25 位老師的流量綽綽有餘
+- [ ] `env.json` 的 `BASE_URL` 已設為正式網址（QR Code、分享連結、社群預覽圖都會用到）
+- [ ] gunicorn 維持單一 worker（登入限流的計數存在程序記憶體內），25 位老師的流量綽綽有餘
+- [ ] `DATABASE_URL` 指向正式的 PostgreSQL，且上傳檔位置（`INSTANCE_DIR`）在重啟後不會遺失
 
 ### 規模與擴充說明
-- SQLite 對 25 位老師、數百位訪客完全足夠；若未來擴大到數百位老師，可將 `db.py` 換成 PostgreSQL（SQL 皆為標準語法），登入限流改用 Redis。
+- 目前每個請求各開一條資料庫連線，對 25 位老師、數百位訪客完全足夠；若未來擴大到數百位老師，可改用連線池（`psycopg_pool`），登入限流改用 Redis 後即可增加 worker 數。
 - 調查表中的「3. 數位教學平臺與工具」「4. 人數與餐食」目前未納入，可比照 `courses` 新增資料表與表單；`/admin/export.xlsx` 已依運用處分工作表匯出（外牆、一頁網、會場手冊等）。
 - 尚未實作：需求清單第 19 項「多年度／多活動分類」。這會改變資料結構（每位老師每年度一份成果），建議確認活動規劃後再做。

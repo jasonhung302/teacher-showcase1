@@ -1,6 +1,9 @@
-"""權限與安全測試（只用 Python 標準函式庫 unittest，不需額外安裝）。
+"""權限與安全測試（unittest）。
 
-執行：python -m unittest discover -s tests -v
+需要一個可連線的 PostgreSQL 測試資料庫，以環境變數 TEST_DATABASE_URL 指定
+（預設 postgresql://localhost/teacher_showcase_test）。每個測試會在裡面建立專屬的 schema，結束後刪除。
+
+執行：python -m unittest discover -s tests -t . -v
 """
 import io
 import json
@@ -9,10 +12,15 @@ import re
 import shutil
 import tempfile
 import unittest
+import uuid
+from pathlib import Path
 
+import psycopg
 from PIL import Image
+from psycopg.conninfo import make_conninfo
 
 os.environ.setdefault("SECRET_KEY", "test-secret")
+TEST_DATABASE_URL = os.environ.get("TEST_DATABASE_URL", "postgresql://localhost/teacher_showcase_test")
 
 from app import create_app                     # noqa: E402
 from app.security import forgot_limiter, login_limiter  # noqa: E402
@@ -36,9 +44,14 @@ def jpeg_with_exif():
 class Base(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.mkdtemp()
-        self.app = create_app({"TESTING": True, "INSTANCE_DIR": __import__("pathlib").Path(self.tmp),
-                               "DATABASE": __import__("pathlib").Path(self.tmp) / "t.db",
-                               "UPLOAD_FOLDER": __import__("pathlib").Path(self.tmp) / "uploads"})
+        # 每個測試一個獨立的 schema：互不干擾，也不會動到同一個資料庫裡的其他資料
+        self.schema = f"test_{uuid.uuid4().hex}"
+        with psycopg.connect(TEST_DATABASE_URL, autocommit=True) as conn:
+            conn.execute(f"CREATE SCHEMA {self.schema}")
+        self.addCleanup(self._drop_schema)
+        self.dsn = make_conninfo(TEST_DATABASE_URL, options=f"-c search_path={self.schema}")
+        self.app = create_app({"TESTING": True, "INSTANCE_DIR": Path(self.tmp), "DATABASE_URL": self.dsn,
+                               "UPLOAD_FOLDER": Path(self.tmp) / "uploads"})
         login_limiter.reset()
         forgot_limiter.reset()
         with self.app.app_context():
@@ -48,6 +61,10 @@ class Base(unittest.TestCase):
 
     def tearDown(self):
         shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def _drop_schema(self):
+        with psycopg.connect(TEST_DATABASE_URL, autocommit=True) as conn:
+            conn.execute(f"DROP SCHEMA IF EXISTS {self.schema} CASCADE")
 
     # ---- helpers
     def csrf(self, client=None, path="/login"):
@@ -68,19 +85,17 @@ class Base(unittest.TestCase):
         return client.post(path, data=data, content_type="multipart/form-data")
 
     def db(self, sql, args=()):
-        from app.db import connect
-        conn = connect(self.app.config["DATABASE"])
-        rows = conn.execute(sql, args).fetchall()
-        conn.commit()
-        conn.close()
-        return rows
+        """直接對測試資料庫下 SQL；回傳 tuple 資料列（非查詢語句回傳空清單）。"""
+        with psycopg.connect(self.dsn, autocommit=True) as conn:
+            cur = conn.execute(sql, args or None)
+            return cur.fetchall() if cur.description else []
 
     def uid(self, username):
-        return self.db("SELECT id FROM users WHERE username = ?", (username,))[0][0]
+        return self.db("SELECT id FROM users WHERE username = %s", (username,))[0][0]
 
     def course_of(self, username):
         return self.db("SELECT c.id FROM courses c JOIN teacher_profiles p ON p.id = c.profile_id"
-                       " JOIN users u ON u.id = p.user_id WHERE u.username = ?", (username,))[0][0]
+                       " JOIN users u ON u.id = p.user_id WHERE u.username = %s", (username,))[0][0]
 
 
 class AuthTests(Base):
@@ -88,6 +103,19 @@ class AuthTests(Base):
         h = self.db("SELECT password_hash FROM users WHERE username='t001'")[0][0]
         self.assertNotIn("Demo1234", h)
         self.assertTrue(h.startswith(("scrypt:", "pbkdf2:")))
+
+    def test_username_is_case_insensitive(self):
+        """帳號不分大小寫：T001 可登入 t001，也不能另外建立只差大小寫的帳號。"""
+        self.assertEqual(self.login("T001").status_code, 302)
+        with self.assertRaises(psycopg.errors.UniqueViolation):
+            self.db("INSERT INTO users (username, password_hash, role, display_name, created_at, updated_at)"
+                    " VALUES ('T001', 'x', 'teacher', 'dup', '-', '-')")
+        c = self.app.test_client()
+        self.login("admin", "Admin1234", client=c)
+        r = self.post("/admin/teachers/new", {"username": "T002", "display_name": "重複", "teacher_code": "099"},
+                      client=c, csrf_from="/admin/")
+        self.assertEqual(r.status_code, 400)
+        self.assertIn("此帳號已被使用", r.get_data(as_text=True))
 
     def test_login_success_and_logout(self):
         r = self.login("t001")
@@ -176,7 +204,7 @@ class PermissionTests(Base):
         self.assertEqual(r.status_code, 404)
         r = self.post(f"/dashboard/courses/{other}/delete")
         self.assertEqual(r.status_code, 404)
-        title = self.db("SELECT title FROM courses WHERE id = ?", (other,))[0][0]
+        title = self.db("SELECT title FROM courses WHERE id = %s", (other,))[0][0]
         self.assertNotEqual(title, "HACKED")
 
     def test_teacher_cannot_touch_other_teachers_items(self):
@@ -184,7 +212,7 @@ class PermissionTests(Base):
         exp = self.db("SELECT e.id FROM teaching_experiences e JOIN teacher_profiles p ON p.id = e.profile_id"
                       " JOIN users u ON u.id = p.user_id WHERE u.username='t002'")[0][0]
         self.assertEqual(self.post(f"/dashboard/items/experiences/{exp}/delete").status_code, 404)
-        self.assertEqual(len(self.db("SELECT 1 FROM teaching_experiences WHERE id = ?", (exp,))), 1)
+        self.assertEqual(len(self.db("SELECT 1 FROM teaching_experiences WHERE id = %s", (exp,))), 1)
         photo = self.db("SELECT ph.id FROM teacher_photos ph JOIN teacher_profiles p ON p.id = ph.profile_id"
                         " JOIN users u ON u.id = p.user_id WHERE u.username='t002'")[0][0]
         self.assertEqual(self.post(f"/dashboard/photos/{photo}/delete").status_code, 404)
@@ -210,7 +238,7 @@ class PermissionTests(Base):
         cid = self.course_of("t002")
         r = self.post(f"/admin/teachers/{uid}/edit/courses/{cid}/edit", {"title": "管理員修正後的課程"})
         self.assertEqual(r.status_code, 302)
-        self.assertEqual(self.db("SELECT title FROM courses WHERE id=?", (cid,))[0][0], "管理員修正後的課程")
+        self.assertEqual(self.db("SELECT title FROM courses WHERE id=%s", (cid,))[0][0], "管理員修正後的課程")
         # 透過 t002 的網址也不能改 t001 的課程
         r = self.post(f"/admin/teachers/{uid}/edit/courses/{self.course_of('t001')}/edit", {"title": "x"})
         self.assertEqual(r.status_code, 404)
@@ -335,7 +363,7 @@ class UploadTests(Base):
         bad = demo_pdf("x").replace(b"/Type /Catalog", b"/Type /Catalog /OpenAction << /S /JavaScript /JS (app.alert(1)) >>")
         self.post(f"/dashboard/courses/{cid}/plans", {"plan_type": "lesson_plan", "file": (io.BytesIO(bad), "js.pdf")})
         rows = self.db("SELECT original_name FROM uploaded_files WHERE category='lesson_plan' AND profile_id ="
-                       " (SELECT profile_id FROM courses WHERE id = ?)", (cid,))
+                       " (SELECT profile_id FROM courses WHERE id = %s)", (cid,))
         self.assertEqual([r[0] for r in rows], ["教案.pdf"])
 
     def test_deleted_file_kept_while_published_then_purged(self):

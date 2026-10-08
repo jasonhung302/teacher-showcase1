@@ -25,10 +25,10 @@ def register_cli(app):
             raise click.ClickException("密碼" + "、".join(problems))
         if pw != getpass.getpass("再輸入一次："):
             raise click.ClickException("兩次密碼不一致")
-        conn = connect(app.config["DATABASE"])
-        with conn:
+        with connect(app.config["DATABASE_URL"]) as conn:
             conn.execute("INSERT INTO users (username, password_hash, role, display_name, email, is_active,"
-                         " must_change_password, created_at, updated_at) VALUES (?, ?, 'admin', ?, ?, 1, 0, ?, ?)",
+                         " must_change_password, created_at, updated_at)"
+                         " VALUES (%s, %s, 'admin', %s, %s, 1, 0, %s, %s)",
                          (username, hash_password(pw), display_name, email or None, ts(), ts()))
         click.echo(f"已建立管理員 {username}")
 
@@ -40,9 +40,8 @@ def register_cli(app):
 
     @app.cli.command("purge-sessions")
     def purge_sessions():
-        conn = connect(app.config["DATABASE"])
-        with conn:
-            n = conn.execute("DELETE FROM sessions WHERE expires_at <= ?", (ts(),)).rowcount
+        with connect(app.config["DATABASE_URL"]) as conn:
+            n = conn.execute("DELETE FROM sessions WHERE expires_at <= %s", (ts(),)).rowcount
         click.echo(f"已清除 {n} 筆過期 Session")
 
     @app.cli.command("backup")

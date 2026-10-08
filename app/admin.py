@@ -3,15 +3,15 @@ import csv
 import io
 import json
 import re
-import sqlite3
 from datetime import datetime, timedelta
 
+import psycopg
 from flask import (Blueprint, Response, abort, current_app, flash, g, redirect, render_template, request,
                    send_file, url_for)
 
 from .backup import NAME_RE as BACKUP_NAME_RE
 from .backup import create_backup, list_backups
-from .db import execute, get_db, get_setting, local_today, parse_ts, query, set_setting, ts
+from .db import execute, get_db, get_setting, insert, local_today, parse_ts, query, set_setting, ts
 from .mail import send_mail
 from .profiles import checklist, completeness, has_unpublished_changes, load_courses, load_items
 from .security import (admin_required, audit, destroy_user_sessions, generate_temp_password,
@@ -37,7 +37,7 @@ def teacher_or_404(uid):
     row = query("SELECT u.*, p.id AS profile_id, p.teacher_code, p.status, p.updated_at AS profile_updated_at,"
                 " p.published_at, p.school_name, p.teacher_name, p.county"
                 " FROM users u JOIN teacher_profiles p ON p.user_id = u.id"
-                " WHERE u.id = ? AND u.role = 'teacher'", (uid,), one=True)
+                " WHERE u.id = %s AND u.role = 'teacher'", (uid,), one=True)
     if row is None:
         abort(404)
     return row
@@ -154,7 +154,7 @@ def reminders_csv():
 @bp.route("/reminders/send", methods=["POST"])
 def reminders_send():
     if not current_app.config["SMTP_HOST"]:
-        flash("尚未設定寄信（SMTP），無法寄送提醒。請先在 .env 設定 SMTP_HOST 等參數，或匯出名單自行聯繫。", "error")
+        flash("尚未設定寄信（SMTP），無法寄送提醒。請先在 env.json 設定 SMTP_HOST 等參數，或匯出名單自行聯繫。", "error")
         return redirect(url_for("admin.dashboard"))
     status = request.form.get("status", "incomplete")
     rows = apply_filter(teacher_overview_rows(), status, (request.form.get("q") or "").strip())
@@ -207,29 +207,28 @@ def _read_account_form(existing=None):
     if data["valid_from"] and data["valid_until"] and data["valid_from"] > data["valid_until"]:
         errors.append("帳號結束日期不可早於開始日期")
     uid = existing["id"] if existing else -1
-    if query("SELECT 1 FROM users WHERE username = ? AND id != ?", (data["username"], uid), one=True):
+    if query("SELECT 1 FROM users WHERE lower(username) = lower(%s) AND id != %s", (data["username"], uid), one=True):
         errors.append("此帳號已被使用")
-    if query("SELECT 1 FROM teacher_profiles WHERE teacher_code = ? AND user_id != ?",
+    if query("SELECT 1 FROM teacher_profiles WHERE teacher_code = %s AND user_id != %s",
              (data["teacher_code"], uid), one=True):
         errors.append("此網址代碼已被使用")
-    if data["email"] and query("SELECT 1 FROM users WHERE lower(email) = lower(?) AND id != ?",
+    if data["email"] and query("SELECT 1 FROM users WHERE lower(email) = lower(%s) AND id != %s",
                                (data["email"], uid), one=True):
         errors.append("此 Email 已被其他帳號使用")
     return data, errors
 
 
-def _create_teacher(db, data, password):
-    cur = db.execute(
+def _create_teacher(data, password):
+    uid = insert(
         "INSERT INTO users (username, password_hash, role, display_name, email, is_active, must_change_password,"
         " valid_from, valid_until, keep_public_after_expiry, created_at, updated_at)"
-        " VALUES (?, ?, 'teacher', ?, ?, 1, 1, ?, ?, ?, ?, ?)",
+        " VALUES (%s, %s, 'teacher', %s, %s, 1, 1, %s, %s, %s, %s, %s)",
         (data["username"], hash_password(password), data["display_name"], data["email"],
          data.get("valid_from"), data.get("valid_until"), data.get("keep_public_after_expiry", 1), ts(), ts()))
-    uid = cur.lastrowid
-    db.execute("INSERT INTO teacher_profiles (user_id, teacher_code, teacher_name, school_name, county,"
-               " contact_email, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-               (uid, data["teacher_code"], data["display_name"], data.get("school"), data.get("county"),
-                data["email"], ts(), ts()))
+    execute("INSERT INTO teacher_profiles (user_id, teacher_code, teacher_name, school_name, county,"
+            " contact_email, created_at, updated_at) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
+            (uid, data["teacher_code"], data["display_name"], data.get("school"), data.get("county"),
+             data["email"], ts(), ts()))
     return uid
 
 
@@ -247,9 +246,9 @@ def teacher_new():
         temp = password or generate_temp_password()
         db = get_db()
         try:
-            with db:   # 帳號與教師資料在同一個交易內建立
-                uid = _create_teacher(db, data, temp)
-        except sqlite3.IntegrityError:
+            with db.transaction():   # 帳號與教師資料在同一個交易內建立
+                uid = _create_teacher(data, temp)
+        except psycopg.IntegrityError:
             flash("帳號或網址代碼重複，請重新確認。", "error")
             return render_template("admin/teacher_form.html", form=data, teacher=None), 400
         audit("teacher_created", f"user:{uid}", data["username"])
@@ -282,11 +281,11 @@ def teacher_edit(uid):
                 flash(e, "error")
             return render_template("admin/teacher_form.html", form=data, teacher=teacher,
                                    **_teacher_extras(teacher)), 400
-        execute("UPDATE users SET username = ?, display_name = ?, email = ?, valid_from = ?, valid_until = ?,"
-                " keep_public_after_expiry = ?, updated_at = ? WHERE id = ?",
+        execute("UPDATE users SET username = %s, display_name = %s, email = %s, valid_from = %s, valid_until = %s,"
+                " keep_public_after_expiry = %s, updated_at = %s WHERE id = %s",
                 (data["username"], data["display_name"], data["email"], data["valid_from"], data["valid_until"],
                  data["keep_public_after_expiry"], ts(), uid))
-        execute("UPDATE teacher_profiles SET teacher_code = ?, updated_at = ? WHERE user_id = ?",
+        execute("UPDATE teacher_profiles SET teacher_code = %s, updated_at = %s WHERE user_id = %s",
                 (data["teacher_code"], ts(), uid))
         audit("teacher_updated", f"user:{uid}")
         flash("教師帳號已更新。", "success")
@@ -299,7 +298,7 @@ def teacher_edit(uid):
 def teacher_toggle(uid):
     teacher = teacher_or_404(uid)
     new = 0 if teacher["is_active"] else 1
-    execute("UPDATE users SET is_active = ?, updated_at = ? WHERE id = ?", (new, ts(), uid))
+    execute("UPDATE users SET is_active = %s, updated_at = %s WHERE id = %s", (new, ts(), uid))
     if not new:
         destroy_user_sessions(uid)          # 停用立即生效
     audit("teacher_enabled" if new else "teacher_disabled", f"user:{uid}")
@@ -313,8 +312,8 @@ def teacher_toggle(uid):
 def teacher_reset_password(uid):
     teacher = teacher_or_404(uid)
     temp = generate_temp_password()
-    execute("UPDATE users SET password_hash = ?, must_change_password = 1, failed_login_count = 0,"
-            " locked_until = NULL, updated_at = ? WHERE id = ?", (hash_password(temp), ts(), uid))
+    execute("UPDATE users SET password_hash = %s, must_change_password = 1, failed_login_count = 0,"
+            " locked_until = NULL, updated_at = %s WHERE id = %s", (hash_password(temp), ts(), uid))
     destroy_user_sessions(uid)
     audit("teacher_password_reset", f"user:{uid}")
     # 直接回應頁面（不 redirect），臨時密碼只顯示這一次、不寫入任何紀錄
@@ -483,9 +482,9 @@ def import_confirm():
         data = {"username": r["username"], "display_name": r["name"], "email": r["email"] or None,
                 "teacher_code": r["teacher_code"], "school": r["school"] or None, "county": r["county"] or None}
         try:
-            with db:
-                uid = _create_teacher(db, data, temp)
-        except sqlite3.IntegrityError:
+            with db.transaction():
+                uid = _create_teacher(data, temp)
+        except psycopg.IntegrityError:
             r["errors"] = ["帳號或代碼已被使用"]
             failed.append(r)
             continue
@@ -522,7 +521,7 @@ def announcements():
             return redirect(url_for("admin.announcements"))
         aid = request.form.get("id", type=int)
         if action == "delete" and aid:
-            execute("DELETE FROM announcements WHERE id = ?", (aid,))
+            execute("DELETE FROM announcements WHERE id = %s", (aid,))
             audit("announcement_deleted", f"announcement:{aid}")
             flash("公告已刪除。", "success")
             return redirect(url_for("admin.announcements"))
@@ -543,20 +542,20 @@ def announcements():
             for e in errors:
                 flash(e, "error")
         elif aid:
-            execute("UPDATE announcements SET title = ?, body = ?, starts_on = ?, ends_on = ?, is_pinned = ?,"
-                    " updated_at = ? WHERE id = ?", (title, body, starts, ends, pinned, ts(), aid))
+            execute("UPDATE announcements SET title = %s, body = %s, starts_on = %s, ends_on = %s, is_pinned = %s,"
+                    " updated_at = %s WHERE id = %s", (title, body, starts, ends, pinned, ts(), aid))
             audit("announcement_updated", f"announcement:{aid}")
             flash("公告已更新。", "success")
         else:
-            aid = execute("INSERT INTO announcements (title, body, starts_on, ends_on, is_pinned, created_by,"
-                          " created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                          (title, body, starts, ends, pinned, g.user["id"], ts(), ts()))
+            aid = insert("INSERT INTO announcements (title, body, starts_on, ends_on, is_pinned, created_by,"
+                         " created_at, updated_at) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
+                         (title, body, starts, ends, pinned, g.user["id"], ts(), ts()))
             audit("announcement_created", f"announcement:{aid}")
             flash("公告已發布，老師登入後會在總覽頁看到。", "success")
         return redirect(url_for("admin.announcements"))
     edit = None
     if request.args.get("edit", type=int):
-        edit = query("SELECT * FROM announcements WHERE id = ?", (request.args.get("edit", type=int),), one=True)
+        edit = query("SELECT * FROM announcements WHERE id = %s", (request.args.get("edit", type=int),), one=True)
     rows = query("SELECT * FROM announcements ORDER BY is_pinned DESC, id DESC")
     return render_template("admin/announcements.html", rows=rows, edit=edit, today=local_today(),
                            deadline=get_setting("deadline"))

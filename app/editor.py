@@ -6,13 +6,13 @@
 
 權限關鍵：
   1. 網址裡『沒有』任何老師 ID 可以被老師竄改；老師的 profile 由 Session 決定。
-  2. 所有子資料（課程、照片、經歷…）都以 `WHERE id = ? AND profile_id = ?` 查詢，
+  2. 所有子資料（課程、照片、經歷…）都以 `WHERE id = %s AND profile_id = %s` 查詢，
      即使猜到別人的課程 ID，也只會得到 404。
 """
 from flask import (Blueprint, Response, abort, current_app, flash, g, jsonify, redirect, render_template,
                    request, url_for)
 
-from .db import execute, get_setting, query, ts
+from .db import execute, get_setting, insert, query, ts
 from .profiles import (COUNTIES, COURSE_FIELDS, GRADES, ITEM_TYPES, PROFILE_FIELDS, SUBJECTS,
                        build_public_snapshot, checklist, completeness, has_unpublished_changes, load_courses,
                        load_items, load_photos, publish, publish_history, publish_problems, restore_version,
@@ -46,14 +46,14 @@ def _resolve_target_profile():
         if g.user["role"] != "admin":
             abort(403)
         profile = query("SELECT p.* FROM teacher_profiles p JOIN users u ON u.id = p.user_id"
-                        " WHERE p.user_id = ? AND u.role = 'teacher'", (g.assist_uid,), one=True)
+                        " WHERE p.user_id = %s AND u.role = 'teacher'", (g.assist_uid,), one=True)
         g.assisting = True
     else:
         if g.user["role"] == "admin":
             return redirect(url_for("admin.dashboard"))
         if g.user["role"] != "teacher":
             abort(403)
-        profile = query("SELECT * FROM teacher_profiles WHERE user_id = ?", (g.user["id"],), one=True)
+        profile = query("SELECT * FROM teacher_profiles WHERE user_id = %s", (g.user["id"],), one=True)
         g.assisting = False
     if profile is None:
         abort(404)
@@ -66,7 +66,7 @@ def pid():
 
 def owned_or_404(table, item_id):
     """所有『依 ID 取得單筆資料』都必須經過這裡。table 只來自程式內白名單。"""
-    row = query(f"SELECT * FROM {table} WHERE id = ? AND profile_id = ?", (item_id, pid()), one=True)
+    row = query(f"SELECT * FROM {table} WHERE id = %s AND profile_id = %s", (item_id, pid()), one=True)
     if row is None:
         abort(404)
     return row
@@ -99,7 +99,7 @@ def flash_errors(errors):
 
 def ctx(**kw):
     pct, missing = completeness(pid())
-    av = query("SELECT stored_name FROM uploaded_files WHERE id = ? AND profile_id = ? AND deleted_at IS NULL",
+    av = query("SELECT stored_name FROM uploaded_files WHERE id = %s AND profile_id = %s AND deleted_at IS NULL",
                (g.profile["avatar_file_id"], pid()), one=True) if g.profile["avatar_file_id"] else None
     return dict(profile=g.profile, pct=pct, missing=missing, assisting=g.assisting,
                 avatar_name=av["stored_name"] if av else None, public_url=public_url(g.profile["teacher_code"]),
@@ -113,7 +113,7 @@ def overview():
     for it in items:
         endpoint, kwargs, anchor = it["target"]
         it["url"] = eurl(endpoint, **kwargs) + (f"#{anchor}" if anchor else "")
-    owner = query("SELECT last_login_at, prev_login_at FROM users WHERE id = ?", (g.profile["user_id"],), one=True)
+    owner = query("SELECT last_login_at, prev_login_at FROM users WHERE id = %s", (g.profile["user_id"],), one=True)
     deadline = get_setting("deadline")
     days_left = None
     if deadline:
@@ -142,10 +142,10 @@ def _read_profile_form():
 
 def _write_profile_text(data):
     cols = [n for n, *_ in PROFILE_FIELDS]
-    execute(f"UPDATE teacher_profiles SET {', '.join(f'{c} = ?' for c in cols)} WHERE id = ?",
+    execute(f"UPDATE teacher_profiles SET {', '.join(f'{c} = %s' for c in cols)} WHERE id = %s",
             [data[c] for c in cols] + [pid()])
     if data["teacher_name"]:      # 讓帳號顯示名稱與講師姓名同步
-        execute("UPDATE users SET display_name = ?, updated_at = ? WHERE id = ?",
+        execute("UPDATE users SET display_name = %s, updated_at = %s WHERE id = %s",
                 (data["teacher_name"], ts(), g.profile["user_id"]))
 
 
@@ -186,7 +186,7 @@ def profile():
         _write_profile_text(data)
         old_avatar = g.profile["avatar_file_id"]
         if new_avatar_id or request.form.get("remove_avatar"):
-            execute("UPDATE teacher_profiles SET avatar_file_id = ? WHERE id = ?", (new_avatar_id, pid()))
+            execute("UPDATE teacher_profiles SET avatar_file_id = %s WHERE id = %s", (new_avatar_id, pid()))
             discard_file(old_avatar)
         changed("profile_saved")
         flash("基本資料已儲存為草稿。", "success")
@@ -220,17 +220,17 @@ def _save_item(kind, cfg, existing=None):
     names = [f["name"] for f in cfg["fields"]]
     table = cfg["table"]
     if existing is None:
-        order = query(f"SELECT COALESCE(MAX(sort_order), 0) + 1 AS n FROM {table} WHERE profile_id = ?",
+        order = query(f"SELECT COALESCE(MAX(sort_order), 0) + 1 AS n FROM {table} WHERE profile_id = %s",
                       (pid(),), one=True)["n"]
         cols = names + ["profile_id", "sort_order", "created_at"] + (["proof_file_id"] if cfg.get("proof") else [])
         vals = [data[n] for n in names] + [pid(), order, ts()] + ([proof_id] if cfg.get("proof") else [])
-        execute(f"INSERT INTO {table} ({', '.join(cols)}) VALUES ({', '.join('?' * len(cols))})", vals)
+        execute(f"INSERT INTO {table} ({', '.join(cols)}) VALUES ({', '.join(['%s'] * len(cols))})", vals)
     else:
-        sets = ", ".join(f"{n} = ?" for n in names)
-        execute(f"UPDATE {table} SET {sets} WHERE id = ? AND profile_id = ?",
+        sets = ", ".join(f"{n} = %s" for n in names)
+        execute(f"UPDATE {table} SET {sets} WHERE id = %s AND profile_id = %s",
                 [data[n] for n in names] + [existing["id"], pid()])
         if cfg.get("proof") and (proof_id or request.form.get("remove_proof")):
-            execute(f"UPDATE {table} SET proof_file_id = ? WHERE id = ? AND profile_id = ?",
+            execute(f"UPDATE {table} SET proof_file_id = %s WHERE id = %s AND profile_id = %s",
                     (proof_id, existing["id"], pid()))
             discard_file(existing["proof_file_id"])
     changed(f"{kind}_saved")
@@ -264,7 +264,7 @@ def item_edit(kind, item_id):
         return redirect(eurl("items", kind=kind))
     proof = None
     if cfg.get("proof") and row["proof_file_id"]:
-        proof = query("SELECT * FROM uploaded_files WHERE id = ? AND profile_id = ?",
+        proof = query("SELECT * FROM uploaded_files WHERE id = %s AND profile_id = %s",
                       (row["proof_file_id"], pid()), one=True)
     return render_template("editor/item_edit.html", **ctx(kind=kind, cfg=cfg, row=row, form=dict(row), proof=proof))
 
@@ -273,7 +273,7 @@ def item_edit(kind, item_id):
 def item_delete(kind, item_id):
     cfg = item_type_or_404(kind)
     row = owned_or_404(cfg["table"], item_id)
-    execute(f"DELETE FROM {cfg['table']} WHERE id = ? AND profile_id = ?", (item_id, pid()))
+    execute(f"DELETE FROM {cfg['table']} WHERE id = %s AND profile_id = %s", (item_id, pid()))
     if cfg.get("proof"):
         discard_file(row["proof_file_id"])
     changed(f"{kind}_deleted")
@@ -291,7 +291,7 @@ def item_move(kind, item_id, direction):
     if 0 <= j < len(rows):
         rows[i], rows[j] = rows[j], rows[i]
         for order, rid in enumerate(rows):
-            execute(f"UPDATE {cfg['table']} SET sort_order = ? WHERE id = ? AND profile_id = ?", (order, rid, pid()))
+            execute(f"UPDATE {cfg['table']} SET sort_order = %s WHERE id = %s AND profile_id = %s", (order, rid, pid()))
         changed(f"{kind}_reordered")
     return redirect(eurl("items", kind=kind))
 
@@ -310,11 +310,11 @@ def reorder(kind):
         ids = [int(x) for x in (request.form.get("ids") or "").split(",") if x.strip()]
     except ValueError:
         abort(400)
-    owned = [r["id"] for r in query(f"SELECT id FROM {table} WHERE profile_id = ?", (pid(),))]
+    owned = [r["id"] for r in query(f"SELECT id FROM {table} WHERE profile_id = %s", (pid(),))]
     if sorted(ids) != sorted(owned):
         return jsonify(ok=False, error="資料已變動，請重新整理頁面後再排序。"), 409
     for order, rid in enumerate(ids):
-        execute(f"UPDATE {table} SET sort_order = ? WHERE id = ? AND profile_id = ?", (order, rid, pid()))
+        execute(f"UPDATE {table} SET sort_order = %s WHERE id = %s AND profile_id = %s", (order, rid, pid()))
     changed(f"{kind}_reordered")
     return autosave_response([])
 
@@ -340,7 +340,7 @@ def photos():
                     flash(f"「{f.filename[:40]}」{e}", "error")
                     continue
                 execute("INSERT INTO teacher_photos (profile_id, file_id, caption, sort_order, created_at)"
-                        " VALUES (?, ?, ?, ?, ?)", (pid(), fid, caption, existing + ok, ts()))
+                        " VALUES (%s, %s, %s, %s, %s)", (pid(), fid, caption, existing + ok, ts()))
                 ok += 1
             if ok:
                 changed("photos_uploaded", f"{ok} files")
@@ -353,7 +353,7 @@ def photos():
 def photo_caption(photo_id):
     owned_or_404("teacher_photos", photo_id)
     caption = (request.form.get("caption") or "").strip()[:100] or None
-    execute("UPDATE teacher_photos SET caption = ? WHERE id = ? AND profile_id = ?", (caption, photo_id, pid()))
+    execute("UPDATE teacher_photos SET caption = %s WHERE id = %s AND profile_id = %s", (caption, photo_id, pid()))
     changed("photo_caption")
     flash("照片說明已更新。", "success")
     return redirect(eurl("photos"))
@@ -362,7 +362,7 @@ def photo_caption(photo_id):
 @bp.route("/photos/<int:photo_id>/delete", methods=["POST"])
 def photo_delete(photo_id):
     row = owned_or_404("teacher_photos", photo_id)
-    execute("DELETE FROM teacher_photos WHERE id = ? AND profile_id = ?", (photo_id, pid()))
+    execute("DELETE FROM teacher_photos WHERE id = %s AND profile_id = %s", (photo_id, pid()))
     discard_file(row["file_id"])
     changed("photo_deleted")
     flash("照片已刪除。", "success")
@@ -393,8 +393,8 @@ def _course_form_ctx(course=None, form=None):
 
 def _write_course(course_id, data):
     names = [n for n, *_ in COURSE_FIELDS]
-    execute(f"UPDATE courses SET {', '.join(f'{n} = ?' for n in names)}, updated_at = ?"
-            f" WHERE id = ? AND profile_id = ?", [data[n] for n in names] + [ts(), course_id, pid()])
+    execute(f"UPDATE courses SET {', '.join(f'{n} = %s' for n in names)}, updated_at = %s"
+            f" WHERE id = %s AND profile_id = %s", [data[n] for n in names] + [ts(), course_id, pid()])
 
 
 @bp.route("/autosave/course/<int:course_id>", methods=["POST"])
@@ -420,11 +420,11 @@ def course_new():
             flash_errors(errors)
             return render_template("editor/course_form.html", **_course_form_ctx(form=request.form)), 400
         names = [n for n, *_ in COURSE_FIELDS]
-        order = query("SELECT COALESCE(MAX(sort_order), 0) + 1 AS n FROM courses WHERE profile_id = ?",
+        order = query("SELECT COALESCE(MAX(sort_order), 0) + 1 AS n FROM courses WHERE profile_id = %s",
                       (pid(),), one=True)["n"]
-        cid = execute(f"INSERT INTO courses ({', '.join(names)}, profile_id, sort_order, created_at, updated_at)"
-                      f" VALUES ({', '.join('?' * len(names))}, ?, ?, ?, ?)",
-                      [data[n] for n in names] + [pid(), order, ts(), ts()])
+        cid = insert(f"INSERT INTO courses ({', '.join(names)}, profile_id, sort_order, created_at, updated_at)"
+                     f" VALUES ({', '.join(['%s'] * len(names))}, %s, %s, %s, %s)",
+                     [data[n] for n in names] + [pid(), order, ts(), ts()])
         changed("course_created", f"course:{cid}")
         flash("課程已建立，接著可以上傳完整教案。", "success")
         return redirect(eurl("course_edit", course_id=cid) + "#plans")
@@ -451,10 +451,10 @@ def course_edit(course_id):
 @bp.route("/courses/<int:course_id>/delete", methods=["POST"])
 def course_delete(course_id):
     owned_or_404("courses", course_id)
-    file_ids = [r["file_id"] for r in query("SELECT file_id FROM lesson_plans WHERE course_id = ? AND profile_id = ?",
+    file_ids = [r["file_id"] for r in query("SELECT file_id FROM lesson_plans WHERE course_id = %s AND profile_id = %s",
                                              (course_id, pid()))]
-    execute("DELETE FROM lesson_plans WHERE course_id = ? AND profile_id = ?", (course_id, pid()))
-    execute("DELETE FROM courses WHERE id = ? AND profile_id = ?", (course_id, pid()))
+    execute("DELETE FROM lesson_plans WHERE course_id = %s AND profile_id = %s", (course_id, pid()))
+    execute("DELETE FROM courses WHERE id = %s AND profile_id = %s", (course_id, pid()))
     for fid in file_ids:
         discard_file(fid)
     changed("course_deleted", f"course:{course_id}")
@@ -476,9 +476,9 @@ def plan_upload(course_id):
         flash(str(e), "error")
         return redirect(eurl("course_edit", course_id=course_id) + "#plans")
     if not title:
-        title = query("SELECT original_name FROM uploaded_files WHERE id = ?", (fid,), one=True)["original_name"]
+        title = query("SELECT original_name FROM uploaded_files WHERE id = %s", (fid,), one=True)["original_name"]
     execute("INSERT INTO lesson_plans (profile_id, course_id, file_id, title, plan_type, created_at)"
-            " VALUES (?, ?, ?, ?, ?, ?)", (pid(), course_id, fid, title, plan_type, ts()))
+            " VALUES (%s, %s, %s, %s, %s, %s)", (pid(), course_id, fid, title, plan_type, ts()))
     changed("plan_uploaded", f"course:{course_id}")
     flash("檔案已上傳。", "success")
     return redirect(eurl("course_edit", course_id=course_id) + "#plans")
@@ -490,7 +490,7 @@ def plan_delete(course_id, plan_id):
     plan = owned_or_404("lesson_plans", plan_id)
     if plan["course_id"] != course_id:
         abort(404)
-    execute("DELETE FROM lesson_plans WHERE id = ? AND profile_id = ?", (plan_id, pid()))
+    execute("DELETE FROM lesson_plans WHERE id = %s AND profile_id = %s", (plan_id, pid()))
     discard_file(plan["file_id"])
     changed("plan_deleted", f"course:{course_id}")
     flash("檔案已刪除。", "success")
