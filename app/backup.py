@@ -4,12 +4,12 @@
 """
 import os
 import re
-import shutil
 import tempfile
 import zipfile
 from datetime import datetime, timedelta, timezone
 
 from .db import connect
+from .storage import get_storage
 
 NAME_RE = re.compile(r"^backup-\d{8}-\d{6}(-\d+)?\.zip$")
 UPLOAD_ENTRY_RE = re.compile(r"^uploads/[A-Za-z0-9_.-]+$")
@@ -58,11 +58,11 @@ def create_backup(cfg, prefix="backup", record=True):
         with zipfile.ZipFile(target, "w", zipfile.ZIP_DEFLATED) as zf:
             for table in TABLES:
                 zf.write(os.path.join(tmp, f"{table}.csv"), _table_entry(table))
-            uploads = cfg["UPLOAD_FOLDER"]
-            if uploads.is_dir():
-                for p in sorted(uploads.iterdir()):
-                    if p.is_file():
-                        zf.write(p, f"uploads/{p.name}", compress_type=zipfile.ZIP_STORED)
+            storage = get_storage(cfg)       # 本機資料夾或 Azure Blob 容器
+            for name in storage.names():
+                data = storage.get(name)
+                if data is not None:
+                    zf.writestr(f"uploads/{name}", data, compress_type=zipfile.ZIP_STORED)
         if not record:
             return target
         # 只保留最近 KEEP 份
@@ -113,6 +113,11 @@ def _load_tables(conn, zf):
                             f" COALESCE((SELECT MAX(id) FROM {table}), 0) + 1, false)", (table,))
 
 
+def _mime_of(name):
+    ext = name.rsplit(".", 1)[-1].lower()
+    return {"jpg": "image/jpeg", "png": "image/png", "webp": "image/webp", "pdf": "application/pdf"}.get(ext)
+
+
 def restore_backup(cfg, zip_path):
     """還原（請先停止網站）。目前資料會先另存一份 before-restore-*.zip，避免還原錯誤無法回頭。"""
     zip_path = os.fspath(zip_path)
@@ -129,12 +134,9 @@ def restore_backup(cfg, zip_path):
         safety_named = create_backup(cfg, prefix="before-restore", record=False)
         with connect(cfg["DATABASE_URL"]) as conn:
             _load_tables(conn, zf)
-        uploads = cfg["UPLOAD_FOLDER"]
-        if uploads.exists():
-            shutil.rmtree(uploads)
-        uploads.mkdir(parents=True)
+        storage = get_storage(cfg)
+        storage.clear()
         for n in names:
             if n.startswith("uploads/"):
-                with zf.open(n) as src, open(uploads / n.split("/", 1)[1], "wb") as dst:
-                    shutil.copyfileobj(src, dst)
+                storage.put(n.split("/", 1)[1], zf.read(n), _mime_of(n))
     return safety_named

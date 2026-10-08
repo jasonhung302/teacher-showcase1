@@ -255,6 +255,32 @@ class PermissionTests(Base):
         self.assertEqual(t.get("/account/password").status_code, 302)     # 已被踢出
         self.assertEqual(self.login("t005", temp, client=t).status_code, 401)
 
+    def test_admin_delete_teacher(self):
+        uid = self.uid("t001")
+        files = [n for row in self.db("SELECT f.stored_name, f.thumb_name FROM uploaded_files f"
+                                      " JOIN teacher_profiles p ON p.id = f.profile_id WHERE p.user_id = %s", (uid,))
+                 for n in row if n]
+        self.assertTrue(files)
+        t = self.app.test_client()
+        self.login("t001", client=t)
+        self.login("admin", "Admin1234")
+        # 確認帳號輸入錯誤 → 不刪除
+        self.post(f"/admin/teachers/{uid}/delete", {"confirm_username": "t002"})
+        self.assertEqual(len(self.db("SELECT 1 FROM users WHERE id = %s", (uid,))), 1)
+        # 教師本人不能刪除
+        self.assertEqual(self.post(f"/admin/teachers/{uid}/delete", {"confirm_username": "t001"}, client=t)
+                         .status_code, 403)
+        r = self.post(f"/admin/teachers/{uid}/delete", {"confirm_username": "t001"})
+        self.assertEqual(r.status_code, 302)
+        self.assertEqual(self.db("SELECT 1 FROM users WHERE id = %s", (uid,)), [])
+        self.assertEqual(self.db("SELECT 1 FROM teacher_profiles WHERE user_id = %s", (uid,)), [])
+        for name in files:
+            self.assertFalse((self.app.config["UPLOAD_FOLDER"] / name).exists())
+        self.assertEqual(self.app.test_client().get("/teacher/001").status_code, 404)
+        self.assertEqual(t.get("/dashboard/").status_code, 302)           # Session 已失效
+        self.assertEqual(self.db("SELECT detail FROM audit_logs WHERE action = 'teacher_deleted'")[0][0][:4], "t001")
+        self.assertEqual(self.post(f"/admin/teachers/{uid}/delete", {"confirm_username": "t001"}).status_code, 404)
+
     def test_disabled_teacher_page_hidden(self):
         self.login("admin", "Admin1234")
         self.post(f"/admin/teachers/{self.uid('t001')}/toggle-active")
