@@ -4,6 +4,7 @@
     flask --app wsgi purge-sessions         清除過期 Session
     flask --app wsgi backup                 建立備份（可放排程，每日執行）
     flask --app wsgi restore-backup <zip>   從備份還原（請先停止網站）
+    flask --app wsgi upload-to-azure        把本機 UPLOAD_FOLDER 的既有檔案搬到 Azure Blob Storage
 """
 import getpass
 
@@ -63,3 +64,19 @@ def register_cli(app):
         except ValueError as e:
             raise click.ClickException(str(e))
         click.echo(f"還原完成。還原前的資料已另存為：{safety}")
+
+    @app.cli.command("upload-to-azure")
+    def upload_to_azure():
+        from .backup import _mime_of
+        from .storage import LocalStorage, get_storage
+        if not app.config["AZURE_STORAGE_CONNECTION_STRING"]:
+            raise click.ClickException("尚未設定 AZURE_STORAGE_CONNECTION_STRING")
+        local, blob = LocalStorage(app.config["UPLOAD_FOLDER"]), get_storage(app.config)
+        existing = set(blob.names())
+        copied = 0
+        for name in local.names():
+            if name not in existing:
+                blob.put(name, local.get(name), _mime_of(name))
+                copied += 1
+        click.echo(f"已上傳 {copied} 個檔案到容器 {app.config['AZURE_STORAGE_CONTAINER']}"
+                   f"（略過已存在的 {len(local.names()) - copied} 個）")

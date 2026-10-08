@@ -1,15 +1,17 @@
 """公開網站：首頁、教師一頁網、QR Code、檔案下載。訪客只能讀取『已發布快照』。"""
+import io
 import json
 import re
 
 from flask import (Blueprint, Response, abort, current_app, g, make_response, render_template, request,
                    send_file)
 
-from .db import local_today, query
+from .db import local_today, parse_ts, query
 from .profiles import COUNTIES
 from .qr import to_svg
 from .services import (PUBLIC_VISIBLE_SQL, VIEW_COOKIE, public_url, record_view, seen_cookie_value, seen_today,
                        should_count_view, site_root, view_stats)
+from .storage import get_storage
 
 bp = Blueprint("public", __name__)
 
@@ -132,13 +134,15 @@ def file(name):
         user["role"] == "admin" or user["id"] == f["owner_id"])
     if not (public_ok or private_ok):
         abort(404)
-    path = current_app.config["UPLOAD_FOLDER"] / name
-    if not path.is_file():
+    data = get_storage().get(name)
+    if data is None:
         abort(404)
     mime = "image/webp" if is_thumb else f["mime_type"]
     is_pdf = mime == "application/pdf"
-    resp = send_file(path, mimetype=mime, as_attachment=is_pdf,
-                     download_name=f["original_name"], max_age=3600 if public_ok else 0, conditional=True)
+    # 檔名是隨機產生且內容永不改變，直接當作 ETag
+    resp = send_file(io.BytesIO(data), mimetype=mime, as_attachment=is_pdf, download_name=f["original_name"],
+                     etag=name, last_modified=parse_ts(f["created_at"]),
+                     max_age=3600 if public_ok else 0, conditional=True)
     resp.headers["Content-Security-Policy"] = "default-src 'none'; img-src 'self'; style-src 'unsafe-inline'"
     if not public_ok:
         resp.headers["Cache-Control"] = "private, no-store"

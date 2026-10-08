@@ -1,7 +1,6 @@
 """檔案上傳：副檔名白名單 + 檔頭（magic bytes）檢查 + Pillow 重新編碼 + 隨機檔名。"""
 import io
 import json
-import os
 import re
 import unicodedata
 import uuid
@@ -10,6 +9,7 @@ from flask import current_app, g
 from PIL import Image, ImageOps, UnidentifiedImageError
 
 from .db import execute, insert, query, ts
+from .storage import get_storage
 
 IMAGE_EXTS = {"jpg", "jpeg", "png"}
 PDF_EXTS = {"pdf"}
@@ -115,10 +115,9 @@ def save_upload(file_storage, category, profile_id):
         ext, mime = "pdf", "application/pdf"
 
     stored_name = f"{uuid.uuid4().hex}.{ext}"
-    folder = cfg["UPLOAD_FOLDER"]
-    folder.mkdir(parents=True, exist_ok=True)
-    _write_new(folder / stored_name, data)
-    thumb = make_thumbnail(data) if kind == "image" else None
+    storage = get_storage()
+    storage.put(stored_name, data, mime)
+    thumb = make_thumbnail(data, storage) if kind == "image" else None
 
     return insert(
         "INSERT INTO uploaded_files (profile_id, uploaded_by, category, stored_name, original_name,"
@@ -128,18 +127,12 @@ def save_upload(file_storage, category, profile_id):
     )
 
 
-def _write_new(path, data):
-    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o640)   # 絕不覆蓋既有檔案
-    with os.fdopen(fd, "wb") as fh:
-        fh.write(data)
-
-
 THUMB_SIDE = 720
 
 
-def make_thumbnail(data, folder=None):
+def make_thumbnail(data, storage=None):
     """產生 WebP 縮圖（長邊 720px），公開頁卡片與相簿使用，原圖只在放大檢視時載入。"""
-    folder = folder or current_app.config["UPLOAD_FOLDER"]
+    storage = storage or get_storage()
     try:
         with Image.open(io.BytesIO(data)) as img:
             img = ImageOps.exif_transpose(img)
@@ -151,19 +144,19 @@ def make_thumbnail(data, folder=None):
     except (OSError, ValueError):
         return None
     name = f"t_{uuid.uuid4().hex}.webp"
-    _write_new(folder / name, out.getvalue())
+    storage.put(name, out.getvalue(), "image/webp")
     return name
 
 
-def backfill_thumbnails(conn, folder):
+def backfill_thumbnails(conn, storage):
     """替還沒有縮圖的圖片補做縮圖（啟動時與建立示範資料後執行，只處理缺少的）。"""
     rows = conn.execute("SELECT id, stored_name FROM uploaded_files"
                         " WHERE thumb_name IS NULL AND mime_type IN ('image/jpeg', 'image/png')").fetchall()
     for row in rows:
-        path = folder / row["stored_name"]
-        if not path.is_file():
+        data = storage.get(row["stored_name"])
+        if data is None:
             continue
-        thumb = make_thumbnail(path.read_bytes(), folder)
+        thumb = make_thumbnail(data, storage)
         if thumb:
             conn.execute("UPDATE uploaded_files SET thumb_name = %s WHERE id = %s", (thumb, row["id"]))
 
@@ -188,16 +181,15 @@ def discard_file(file_id):
 
 def purge_deleted_files():
     keep = published_file_names()
+    storage = get_storage()
     for row in query("SELECT id, stored_name, thumb_name FROM uploaded_files WHERE deleted_at IS NOT NULL"):
         if row["stored_name"] in keep:
             continue
-        folder = current_app.config["UPLOAD_FOLDER"]
-        path = folder / row["stored_name"]
         try:
-            path.unlink(missing_ok=True)
+            storage.delete(row["stored_name"])
             if row["thumb_name"]:
-                (folder / row["thumb_name"]).unlink(missing_ok=True)
-        except OSError:
-            current_app.logger.exception("刪除檔案失敗 %s", path)
+                storage.delete(row["thumb_name"])
+        except Exception:      # noqa: BLE001 — 本機 OSError 或 Azure 連線錯誤：下次再清
+            current_app.logger.exception("刪除檔案失敗 %s", row["stored_name"])
             continue
         execute("DELETE FROM uploaded_files WHERE id = %s", (row["id"],))

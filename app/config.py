@@ -63,6 +63,10 @@ class Config:
     INSTANCE_DIR = Path(os.environ.get("INSTANCE_DIR", BASE_DIR / "instance"))
     UPLOAD_FOLDER = Path(os.environ.get("UPLOAD_FOLDER", INSTANCE_DIR / "uploads"))
 
+    # Azure Blob Storage：設定連線字串後，上傳檔改存到此儲存體帳戶的容器（不再使用 UPLOAD_FOLDER）
+    AZURE_STORAGE_CONNECTION_STRING = os.environ.get("AZURE_STORAGE_CONNECTION_STRING", "")
+    AZURE_STORAGE_CONTAINER = os.environ.get("AZURE_STORAGE_CONTAINER", "uploads")
+
     # ---- 上傳限制 ----
     IMAGE_MAX_BYTES = _int("IMAGE_MAX_MB", 5) * 1024 * 1024
     PDF_MAX_BYTES = _int("PDF_MAX_MB", 20) * 1024 * 1024

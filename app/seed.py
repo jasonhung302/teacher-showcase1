@@ -10,6 +10,7 @@ from PIL import Image, ImageDraw
 from .db import execute, get_db, insert, local_today, query, ts
 from .profiles import publish
 from .security import hash_password
+from .storage import get_storage
 
 PALETTES = [((222, 236, 247), (30, 96, 145)), ((252, 238, 214), (196, 120, 22)),
             ((225, 243, 233), (46, 125, 84)), ((240, 231, 247), (110, 72, 150))]
@@ -147,12 +148,11 @@ def seed(app):
     db = get_db()
     if query("SELECT 1 FROM users LIMIT 1"):
         raise click.ClickException("資料庫已有使用者，為避免覆蓋，已停止建立示範資料。")
-    folder = app.config["UPLOAD_FOLDER"]
-    folder.mkdir(parents=True, exist_ok=True)
+    storage = get_storage(app.config)
 
     def store(pid, uid, category, data, ext, mime, original):
         name = f"{uuid.uuid4().hex}.{ext}"
-        (folder / name).write_bytes(data)
+        storage.put(name, data, mime)
         return insert("INSERT INTO uploaded_files (profile_id, uploaded_by, category, stored_name, original_name,"
                       " mime_type, size_bytes, created_at) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
                       (pid, uid, category, name, original, mime, len(data), ts()))
@@ -209,7 +209,7 @@ def seed(app):
 
     # 補縮圖，再用正式的發布函式發布，確保與線上行為一致（也會寫入發布歷史）
     from .uploads import backfill_thumbnails
-    backfill_thumbnails(db, folder)
+    backfill_thumbnails(db, storage)
     for t in TEACHERS:
         if t["publish"]:
             publish(query("SELECT p.id FROM teacher_profiles p JOIN users u ON u.id = p.user_id WHERE u.username = %s",

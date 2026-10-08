@@ -153,6 +153,8 @@ waitress-serve --host 127.0.0.1 --port 8000 wsgi:app
    | `DATABASE_URL` | `postgresql://帳號:密碼@伺服器名稱.postgres.database.azure.com:5432/teacher_showcase?sslmode=require`（密碼含 `@ : / #` 等字元需做 URL 編碼） |
    | `SECRET_KEY` | 長隨機字串 |
    | `INSTANCE_DIR` | `/home/data`（`/home` 是 App Service 的持久儲存；放在別處的上傳檔會在重啟或重新部署後消失） |
+   | `AZURE_STORAGE_CONNECTION_STRING` | 儲存體帳戶 →「安全性 + 網路」→「存取金鑰」的**連線字串**。設定後老師上傳的圖片與 PDF 都存到 Blob Storage |
+   | `AZURE_STORAGE_CONTAINER` | 容器名稱，預設 `uploads`（不存在時自動建立為私人容器，不需開放匿名存取；檔案仍由網站檢查權限後提供） |
    | `COOKIE_SECURE`、`TRUST_PROXY` | `1` |
    | `BASE_URL` | 正式網址 |
    | `SCM_DO_BUILD_DURING_DEPLOYMENT` | `true`（部署時自動 `pip install -r requirements.txt`） |
@@ -168,6 +170,8 @@ waitress-serve --host 127.0.0.1 --port 8000 wsgi:app
 
 - 改用 `Dockerfile` 以容器部署時，另外設定 `WEBSITES_PORT=8000` 與 `WEBSITES_ENABLE_APP_SERVICE_STORAGE=true`（後者讓 `/home` 持久化）。
 - 後台的「備份」會存到 `/home/data/backups/`，內容包含資料庫與上傳檔；建議定期下載一份到其他地方。
+- 原本已存在 `/home/data/uploads` 的檔案，設定好儲存體連線字串後在 App Service 的 SSH 執行一次 `flask --app wsgi upload-to-azure` 即可搬到 Blob Storage（已存在的會略過，可重複執行）。
+- 未設定 `AZURE_STORAGE_CONNECTION_STRING` 時（本機開發、測試），上傳檔照舊存在 `UPLOAD_FOLDER`。
 
 ### 上線檢查清單
 - [ ] `SECRET_KEY` 為長隨機字串（未設定時每次重啟所有人都會被登出）
