@@ -97,6 +97,23 @@
       {% endfor %}
     </ul>
   </div>
+
+  <div class="card card-danger">
+    <h2>刪除教師</h2>
+    <p>將<strong>永久刪除</strong>「{{ teacher.display_name }}」的帳號與所有資料：個人資料、課程、教案、照片、發布紀錄、瀏覽統計與所有上傳檔案，公開頁也會立即下架。<strong>此動作無法復原</strong>；若只是暫時不公開，請改用「停用帳號」。</p>
+    <form method="post" action="{{ url_for('admin.teacher_delete', uid=teacher.id) }}"
+          data-confirm="最後確認：永久刪除「{{ teacher.display_name }}」的所有資料？">
+      {{ m.csrf() }}
+      <div class="field">
+        <label for="confirm_username">請輸入登入帳號 <strong>{{ teacher.username }}</strong> 以確認</label>
+        <input id="confirm_username" name="confirm_username" required autocomplete="off"
+               autocapitalize="none" spellcheck="false" pattern="{{ teacher.username|replace('.', '\\.') }}">
+      </div>
+      <div class="form-actions">
+        <button class="btn btn-ghost-danger" type="submit">永久刪除此教師</button>
+      </div>
+    </form>
+  </div>
   {% endif %}
 </div>
 {% endblock %}

@@ -17,6 +17,7 @@ from .profiles import checklist, completeness, has_unpublished_changes, load_cou
 from .security import (admin_required, audit, destroy_user_sessions, generate_temp_password,
                        hash_password, password_problems)
 from .services import public_url, site_root, view_stats
+from .storage import get_storage
 
 bp = Blueprint("admin", __name__)
 
@@ -306,6 +307,33 @@ def teacher_toggle(uid):
           + ("" if new else "停用期間無法登入，公開頁面也會暫時隱藏。"), "success")
     return redirect(request.form.get("back") == "edit" and url_for("admin.teacher_edit", uid=uid)
                     or url_for("admin.dashboard"))
+
+
+@bp.route("/teachers/<int:uid>/delete", methods=["POST"])
+def teacher_delete(uid):
+    """永久刪除教師帳號與所有資料（個人資料、課程、教案、照片、發布歷史、瀏覽統計、上傳檔）。無法復原。"""
+    teacher = teacher_or_404(uid)
+    if request.form.get("confirm_username", "").strip() != teacher["username"]:
+        flash("確認帳號輸入不正確，未刪除任何資料。", "error")
+        return redirect(url_for("admin.teacher_edit", uid=uid))
+    files = query("SELECT stored_name, thumb_name FROM uploaded_files WHERE profile_id = %s",
+                  (teacher["profile_id"],))
+    with get_db().transaction():
+        execute("DELETE FROM users WHERE id = %s", (uid,))    # 其餘資料表皆 ON DELETE CASCADE
+        audit("teacher_deleted", f"user:{uid}", f"{teacher['username']} / {teacher['teacher_code']}"
+              f" / {teacher['display_name']}")
+    # 資料庫已提交才刪實體檔；個別檔案刪除失敗只記錄，不影響結果（孤兒檔不會再被任何頁面引用）
+    storage = get_storage()
+    for f in files:
+        for name in (f["stored_name"], f["thumb_name"]):
+            if not name:
+                continue
+            try:
+                storage.delete(name)
+            except Exception:      # noqa: BLE001
+                current_app.logger.exception("刪除檔案失敗 %s", name)
+    flash(f"已永久刪除「{teacher['display_name']}」的帳號與所有資料。", "success")
+    return redirect(url_for("admin.dashboard"))
 
 
 @bp.route("/teachers/<int:uid>/reset-password", methods=["POST"])

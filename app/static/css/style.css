@@ -633,6 +633,8 @@ body.no-scroll { overflow: hidden; }
 .rtable tr.row-error td { background: var(--danger-soft); }
 .text-ok { color: var(--ok); }
 .text-danger { color: var(--danger); }
+.card-danger { border-color: #f0cfcb; }
+.card-danger h2 { color: var(--danger); }
 .confirm-bar { position: sticky; bottom: 12px; border-top: 4px solid var(--primary); }
 .inline-fields { display: flex; gap: .75rem; align-items: flex-end; flex-wrap: wrap; }
 .inline-fields .field { margin: 0; }
