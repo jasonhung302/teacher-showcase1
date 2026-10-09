@@ -13,7 +13,8 @@ from .backup import NAME_RE as BACKUP_NAME_RE
 from .backup import create_backup, list_backups
 from .db import execute, get_db, get_setting, insert, local_today, parse_ts, query, set_setting, ts
 from .mail import send_mail
-from .profiles import checklist, completeness, has_unpublished_changes, load_courses, load_items
+from .profiles import (checklist, completeness, has_unpublished_changes, load_courses, load_items, overall_pct,
+                       required_pct)
 from .security import (admin_required, audit, destroy_user_sessions, generate_temp_password,
                        hash_password, password_problems)
 from .services import public_url, site_root, view_stats
@@ -72,9 +73,8 @@ def teacher_overview_rows():
     out = []
     for r in rows:
         items = checklist(r["profile_id"])
-        req = [i for i in items if i["required"]]
-        pct = round(sum(i["done"] for i in req) * 100 / len(req))
-        out.append(dict(r, pct=pct, missing=[i["label"] for i in req if not i["done"]],
+        out.append(dict(r, pct=required_pct(items),
+                        missing=[i["label"] for i in items if i["required"] and not i["done"]],
                         has_changes=has_unpublished_changes(r), stale=r["updated_at"] < stale_before,
                         views=views.get(r["profile_id"], {"total": 0, "d7": 0, "d30": 0})))
     return out
@@ -267,8 +267,7 @@ def _cred_row(t, password):
 
 def _teacher_extras(teacher):
     items = checklist(teacher["profile_id"])
-    req = [i for i in items if i["required"]]
-    return {"checklist": items, "pct": round(sum(i["done"] for i in req) * 100 / len(req)),
+    return {"checklist": items, "pct": required_pct(items), "overall_pct": overall_pct(items),
             "views": view_stats(teacher["profile_id"])}
 
 

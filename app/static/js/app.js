@@ -7,6 +7,16 @@
   var $ = function (sel, root) { return (root || document).querySelector(sel); };
   var $$ = function (sel, root) { return Array.prototype.slice.call((root || document).querySelectorAll(sel)); };
 
+  // ---------------------------------------------------------------- 頭像載入失敗 → 改顯示預設人物圖示
+  function avatarFailed(img) {
+    var fb = img.nextElementSibling;
+    if (fb && fb.classList.contains("avatar-fallback")) { fb.hidden = false; img.remove(); }
+  }
+  $$("img[data-avatar-img]").forEach(function (img) {
+    if (img.complete && img.naturalWidth === 0) avatarFailed(img);
+    else img.addEventListener("error", function () { avatarFailed(img); });
+  });
+
   function csrf() {
     var el = $('input[name="csrf_token"]');
     return el ? el.value : "";

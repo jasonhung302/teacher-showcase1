@@ -1,13 +1,15 @@
 {% extends "base.html" %}
+{% import "macros.html" as m with context %}
 {% block body_class %}page-home{% endblock %}
 
 {% macro teacher_card(t) %}
   <a class="teacher-card card" href="{{ url_for('public.teacher', code=t.teacher_code) }}">
     <div class="teacher-card-photo">
       {% if t.avatar %}
-        <img src="{{ file_url(t.avatar, t.avatar_thumb) }}" alt="" loading="lazy" decoding="async">
+        <img src="{{ file_url(t.avatar, t.avatar_thumb) }}" alt="" loading="lazy" decoding="async" data-avatar-img>
+        {{ m.default_avatar(hidden=true) }}
       {% else %}
-        <span class="avatar-fallback" aria-hidden="true">{{ t.teacher_name[:1] }}</span>
+        {{ m.default_avatar() }}
       {% endif %}
     </div>
     <div class="teacher-card-body">
