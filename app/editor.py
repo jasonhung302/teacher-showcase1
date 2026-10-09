@@ -12,6 +12,7 @@
 from flask import (Blueprint, Response, abort, current_app, flash, g, jsonify, redirect, render_template,
                    request, url_for)
 
+from .admin import EMAIL_RE
 from .db import execute, get_setting, insert, query, ts
 from .profiles import (COUNTIES, COURSE_FIELDS, GRADES, ITEM_TYPES, PROFILE_FIELDS, SUBJECTS,
                        build_public_snapshot, checklist, completeness, has_unpublished_changes, load_courses,
@@ -149,6 +150,28 @@ def _write_profile_text(data):
                 (data["teacher_name"], ts(), g.profile["user_id"]))
 
 
+def _fill_account_email(email):
+    """帳號 Email（忘記密碼用）還是空的，就用老師填的聯繫 Email 補上；之後只能由管理員修改。
+
+    只在『儲存草稿』與『發布』時呼叫，不在自動儲存時呼叫，避免把打到一半的 Email 寫進帳號。
+    回傳 False 表示該 Email 已被其他帳號使用而未寫入。
+    """
+    uid = g.profile["user_id"]
+    if not email or not EMAIL_RE.match(email):
+        return True
+    if query("SELECT email FROM users WHERE id = %s", (uid,), one=True)["email"]:
+        return True
+    if query("SELECT 1 FROM users WHERE lower(email) = lower(%s) AND id != %s", (email, uid), one=True):
+        return False
+    execute("UPDATE users SET email = %s, updated_at = %s WHERE id = %s AND email IS NULL", (email, ts(), uid))
+    audit("account_email_filled", f"user:{uid}")
+    return True
+
+
+def _flash_email_taken():
+    flash("您填的電子郵件已被其他帳號使用，無法作為忘記密碼的收信信箱，請洽系統管理員。", "warning")
+
+
 def autosave_response(errors):
     if errors:
         return jsonify(ok=False, errors=errors), 400
@@ -184,12 +207,15 @@ def profile():
             return render_template("editor/profile.html", **ctx(form=data, counties=COUNTIES)), 400
 
         _write_profile_text(data)
+        email_ok = _fill_account_email(data["contact_email"])
         old_avatar = g.profile["avatar_file_id"]
         if new_avatar_id or request.form.get("remove_avatar"):
             execute("UPDATE teacher_profiles SET avatar_file_id = %s WHERE id = %s", (new_avatar_id, pid()))
             discard_file(old_avatar)
         changed("profile_saved")
         flash("基本資料已儲存為草稿。", "success")
+        if not email_ok:
+            _flash_email_taken()
         return redirect(eurl("profile"))
     return render_template("editor/profile.html", **ctx(form=dict(g.profile), counties=COUNTIES))
 
@@ -514,6 +540,8 @@ def do_publish():
     purge_deleted_files()
     audit(("assist_" if g.assisting else "") + "published", f"profile:{pid()}")
     flash("已發布！訪客現在可以看到最新內容。", "success")
+    if not _fill_account_email(g.profile["contact_email"]):
+        _flash_email_taken()
     return redirect(eurl("overview"))
 
 

@@ -87,6 +87,7 @@ python -m unittest discover -s tests -t . -v
 | `flask --app wsgi purge-sessions` | 清除過期 Session（可放 cron） |
 | `flask --app wsgi backup` | 建立備份（存在 `instance/backups/`，保留最近 14 份） |
 | `flask --app wsgi restore-backup <zip>` | 從備份還原（請先停止網站；目前資料會先自動另存） |
+| `flask --app wsgi fill-account-emails` | 帳號 Email 空白的老師，以其自填的聯繫 Email 補上（可重複執行） |
 
 忘記密碼：未設定 SMTP 時，重設連結會印在伺服器終端機的 log 中，方便測試。
 
@@ -171,6 +172,7 @@ waitress-serve --host 127.0.0.1 --port 8000 wsgi:app
 - 改用 `Dockerfile` 以容器部署時，另外設定 `WEBSITES_PORT=8000` 與 `WEBSITES_ENABLE_APP_SERVICE_STORAGE=true`（後者讓 `/home` 持久化）。
 - 後台的「備份」會存到 `/home/data/backups/`，內容包含資料庫與上傳檔；建議定期下載一份到其他地方。
 - 原本已存在 `/home/data/uploads` 的檔案，設定好儲存體連線字串後在 App Service 的 SSH 執行一次 `flask --app wsgi upload-to-azure` 即可搬到 Blob Storage（已存在的會略過，可重複執行）。
+- 老師帳號 Email 空白時，老師在基本資料按「儲存草稿」或發布後會自動以自填的 Email 補上（忘記密碼用）。此功能上線前已填好 Email 的老師，在 SSH 執行一次 `flask --app wsgi fill-account-emails` 即可補齊。
 - 未設定 `AZURE_STORAGE_CONNECTION_STRING` 時（本機開發、測試），上傳檔照舊存在 `UPLOAD_FOLDER`。
 
 ### 上線檢查清單

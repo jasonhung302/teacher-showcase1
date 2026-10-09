@@ -4,6 +4,7 @@
     flask --app wsgi purge-sessions         清除過期 Session
     flask --app wsgi backup                 建立備份（可放排程，每日執行）
     flask --app wsgi restore-backup <zip>   從備份還原（請先停止網站）
+    flask --app wsgi fill-account-emails    帳號 Email 空白的老師，以自填的聯繫 Email 補上
     flask --app wsgi upload-to-azure        把本機 UPLOAD_FOLDER 的既有檔案搬到 Azure Blob Storage
 """
 import getpass
@@ -64,6 +65,30 @@ def register_cli(app):
         except ValueError as e:
             raise click.ClickException(str(e))
         click.echo(f"還原完成。還原前的資料已另存為：{safety}")
+
+    @app.cli.command("fill-account-emails")
+    def fill_account_emails():
+        """帳號 Email 為空、但老師已填聯繫 Email 的，一次補上（可重複執行）。"""
+        from .admin import EMAIL_RE
+        filled, skipped = 0, []
+        with connect(app.config["DATABASE_URL"]) as conn:
+            rows = conn.execute("SELECT u.id, u.username, p.contact_email FROM users u"
+                                " JOIN teacher_profiles p ON p.user_id = u.id"
+                                " WHERE u.email IS NULL AND p.contact_email <> '' ORDER BY u.id").fetchall()
+            for r in rows:
+                email = r["contact_email"].strip()
+                if not EMAIL_RE.match(email):
+                    skipped.append(f"{r['username']}（格式不正確）")
+                elif conn.execute("SELECT 1 FROM users WHERE lower(email) = lower(%s)", (email,)).fetchone():
+                    skipped.append(f"{r['username']}（已被其他帳號使用）")
+                else:
+                    conn.execute("UPDATE users SET email = %s, updated_at = %s WHERE id = %s", (email, ts(), r["id"]))
+                    conn.execute("INSERT INTO audit_logs (action, target, detail, created_at)"
+                                 " VALUES ('account_email_filled', %s, 'cli', %s)", (f"user:{r['id']}", ts()))
+                    filled += 1
+        click.echo(f"已補上 {filled} 位老師的帳號 Email")
+        for s in skipped:
+            click.echo(f"  略過 {s}")
 
     @app.cli.command("upload-to-azure")
     def upload_to_azure():
