@@ -182,6 +182,55 @@ class AuthTests(Base):
         r = self.client.get(link)
         self.assertEqual(r.status_code, 302)
 
+    def test_contact_email_fills_account_email(self):
+        """管理員未設帳號 Email 時，老師自己填的 Email 會成為忘記密碼的收信信箱。"""
+        self.assertIsNone(self.db("SELECT email FROM users WHERE username='t003'")[0][0])
+        self.login("t003")
+        base = {"county": "新北市", "school_name": "X", "teacher_name": "王小明"}
+        # 自動儲存不寫入帳號 Email（避免存到打到一半的 Email）
+        self.post("/dashboard/autosave/profile", {**base, "contact_email": "new.teacher@example.co"})
+        self.assertIsNone(self.db("SELECT email FROM users WHERE username='t003'")[0][0])
+        # 按「儲存草稿」才寫入
+        self.post("/dashboard/profile", {**base, "contact_email": "new.teacher@example.com"})
+        self.assertEqual(self.db("SELECT email FROM users WHERE username='t003'")[0][0], "new.teacher@example.com")
+        # 寫入後老師再改不會變更帳號 Email
+        self.post("/dashboard/profile", {**base, "contact_email": "other@example.com"})
+        self.assertEqual(self.db("SELECT email FROM users WHERE username='t003'")[0][0], "new.teacher@example.com")
+        token = self.csrf(client=self.app.test_client(), path="/forgot-password")
+        with self.assertLogs(self.app.logger, "WARNING") as logs:
+            self.app.test_client().post("/forgot-password", data={"identifier": "new.teacher@example.com",
+                                                                  "csrf_token": token})
+        self.assertIn("new.teacher@example.com", "\n".join(logs.output))
+
+    def test_contact_email_filled_on_publish(self):
+        self.db("UPDATE teacher_profiles SET contact_email = 'pub@example.com' WHERE teacher_code = '001'")
+        self.db("UPDATE users SET email = NULL WHERE username='t001'")
+        self.login("t001")
+        self.post("/dashboard/publish")
+        self.assertEqual(self.db("SELECT email FROM users WHERE username='t001'")[0][0], "pub@example.com")
+
+    def test_fill_account_emails_cli(self):
+        self.db("UPDATE teacher_profiles SET contact_email = 'cli@example.com' WHERE teacher_code = '001'")
+        self.db("UPDATE users SET email = NULL WHERE username='t001'")
+        out = self.app.test_cli_runner().invoke(args=["fill-account-emails"]).output
+        self.assertIn("已補上 1 位", out)
+        self.assertEqual(self.db("SELECT email FROM users WHERE username='t001'")[0][0], "cli@example.com")
+
+    def test_contact_email_does_not_override_admin_email(self):
+        self.db("UPDATE users SET email = 'admin.set@example.edu.tw' WHERE username='t001'")
+        self.login("t001")
+        self.post("/dashboard/profile", {"county": "新北市", "school_name": "X", "teacher_name": "林怡君",
+                                         "contact_email": "changed@example.com"})
+        self.assertEqual(self.db("SELECT email FROM users WHERE username='t001'")[0][0], "admin.set@example.edu.tw")
+
+    def test_contact_email_taken_by_other_account_not_synced(self):
+        taken = self.db("SELECT email FROM users WHERE username='t001'")[0][0]
+        self.login("t003")
+        r = self.post("/dashboard/profile", {"county": "新北市", "school_name": "X", "teacher_name": "王小明",
+                                             "contact_email": taken})
+        self.assertIsNone(self.db("SELECT email FROM users WHERE username='t003'")[0][0])
+        self.assertIn("已被其他帳號使用", self.client.get(r.headers["Location"]).get_data(as_text=True))
+
     def test_open_redirect_blocked(self):
         token = self.csrf()
         r = self.client.post("/login?next=//evil.example.com", data={"username": "t001", "password": "Demo1234",

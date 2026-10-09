@@ -110,6 +110,7 @@
 ```
 /forgot-password 輸入帳號或 Email → 不論帳號是否存在都顯示相同訊息
 → Email 收到 30 分鐘有效、只能用一次的連結 → 設定新密碼 → 所有裝置登出
+（帳號 Email 空白時，老師在基本資料按「儲存草稿」或發布，會以自填的聯繫 Email 補上；之後只能由管理員修改）
 （沒有 Email 的老師 → 請管理員「重設密碼」）
 ```
 
@@ -161,7 +162,7 @@ erDiagram
 | password_hash | TEXT | scrypt 雜湊（含 salt），不存明碼 |
 | role | TEXT | `admin` / `teacher`（CHECK 限制） |
 | display_name | TEXT | 顯示名稱 |
-| email | TEXT | 忘記密碼收信用 |
+| email | TEXT | 忘記密碼收信用；空白時由老師自填的 contact_email 補上 |
 | is_active | INTEGER | 0 = 停用 |
 | must_change_password | INTEGER | 1 = 下次登入必須改密碼 |
 | failed_login_count / locked_until | | 登入失敗鎖定 |
@@ -378,7 +379,7 @@ teacher-showcase/
 │   ├── services.py          公開網址、瀏覽統計、公告、帳號期限
 │   ├── backup.py            備份與還原
 │   ├── mail.py              寄信
-│   ├── cli.py               flask 指令：create-admin / seed-demo / purge-sessions
+│   ├── cli.py               flask 指令：create-admin / seed-demo / purge-sessions / fill-account-emails
 │   ├── seed.py              示範資料
 │   ├── templates/
 │   │   ├── base.html  macros.html
