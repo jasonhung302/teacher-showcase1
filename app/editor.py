@@ -15,9 +15,9 @@ from flask import (Blueprint, Response, abort, current_app, flash, g, jsonify, r
 from .admin import EMAIL_RE
 from .db import execute, get_setting, insert, query, ts
 from .profiles import (COUNTIES, COURSE_FIELDS, GRADES, ITEM_TYPES, PROFILE_FIELDS, SUBJECTS,
-                       build_public_snapshot, checklist, completeness, has_unpublished_changes, load_courses,
-                       load_items, load_photos, publish, publish_history, publish_problems, restore_version,
-                       touch_profile, unpublish)
+                       build_public_snapshot, checklist, has_unpublished_changes, load_courses, load_items,
+                       load_photos, overall_pct, publish, publish_history, publish_problems, required_pct,
+                       restore_version, touch_profile, unpublish)
 from .qr import to_png, to_svg
 from .security import audit
 from .services import active_announcements, daily_views, public_url, view_stats
@@ -99,10 +99,11 @@ def flash_errors(errors):
 
 
 def ctx(**kw):
-    pct, missing = completeness(pid())
+    items = kw.pop("checklist", None) or checklist(pid())
     av = query("SELECT stored_name FROM uploaded_files WHERE id = %s AND profile_id = %s AND deleted_at IS NULL",
                (g.profile["avatar_file_id"], pid()), one=True) if g.profile["avatar_file_id"] else None
-    return dict(profile=g.profile, pct=pct, missing=missing, assisting=g.assisting,
+    return dict(profile=g.profile, pct=required_pct(items), overall_pct=overall_pct(items), checklist=items,
+                problems=publish_problems(pid(), items), assisting=g.assisting,
                 avatar_name=av["stored_name"] if av else None, public_url=public_url(g.profile["teacher_code"]),
                 has_changes=has_unpublished_changes(g.profile), item_types=ITEM_TYPES, **kw)
 
@@ -123,7 +124,7 @@ def overview():
         days_left = (date.fromisoformat(deadline) - date.fromisoformat(local_today())).days
     daily = daily_views(pid(), 30)
     return render_template("editor/overview.html", **ctx(
-        checklist=items, problems=publish_problems(pid()), stats=view_stats(pid()),
+        checklist=items, stats=view_stats(pid()),
         daily=daily, daily_max=max([v for _d, v in daily] + [1]), history=publish_history(pid()),
         announcements=active_announcements(), deadline=deadline, days_left=days_left, owner=owner))
 

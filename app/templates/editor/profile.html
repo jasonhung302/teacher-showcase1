@@ -26,7 +26,7 @@
         <input id="teacher_name" name="teacher_name" value="{{ form.teacher_name or '' }}" maxlength="50" autocomplete="name">
       </div>
       <div class="field">
-        <label for="job_title">職稱</label>
+        <label for="job_title">職稱 <span class="req">*</span></label>
         <input id="job_title" name="job_title" value="{{ form.job_title or '' }}" maxlength="50" placeholder="例：五年級導師、資訊組長">
       </div>
       <div class="field field-wide">
@@ -47,7 +47,7 @@
         {% if avatar_name %}
           <img src="{{ url_for('public.file', name=avatar_name) }}" alt="目前的個人照片">
         {% else %}
-          <span class="avatar-fallback" aria-hidden="true">{{ (profile.teacher_name or '師')[:1] }}</span>
+          {{ m.default_avatar() }}
         {% endif %}
       </div>
       <div class="avatar-fields">
@@ -72,11 +72,11 @@
     <p class="muted small">僅供主辦單位與管理員聯繫使用，不會出現在任何公開頁面。</p>
     <div class="form-grid">
       <div class="field">
-        <label for="phone">手機號碼</label>
+        <label for="phone">手機號碼 <span class="req">*</span></label>
         <input id="phone" name="phone" type="tel" value="{{ form.phone or '' }}" maxlength="20" placeholder="0912-345-678" autocomplete="tel">
       </div>
       <div class="field">
-        <label for="contact_email">電子郵件</label>
+        <label for="contact_email">電子郵件 <span class="req">*</span></label>
         <input id="contact_email" name="contact_email" type="email" value="{{ form.contact_email or '' }}" maxlength="120" autocomplete="email">
         <span class="hint">若帳號尚未設定 Email，按「儲存草稿」或發布後，忘記密碼的重設連結會寄到這裡；之後如需更換請洽系統管理員。</span>
       </div>

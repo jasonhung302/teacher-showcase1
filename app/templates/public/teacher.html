@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% import "macros.html" as m with context %}
 {% set desc = (t.slogan ~ '｜' if t.slogan else '') ~ (t.philosophy|replace('\n', ' ')|truncate(110, True, '…') if t.philosophy else t.school_name ~ ' ' ~ t.job_title) %}
 {% block title %}{{ t.teacher_name or '教師' }}｜{{ t.school_name }}｜{{ site_name }}{% endblock %}
 {% block meta %}
@@ -33,14 +34,15 @@
   <div class="container t-hero-inner">
     <div class="t-photo">
       {% if t.avatar %}
-        <img src="{{ file_url(t.avatar, t.avatar_thumb) }}" alt="{{ t.teacher_name }} 的個人照片">
+        <img src="{{ file_url(t.avatar, t.avatar_thumb) }}" alt="{{ t.teacher_name }} 的個人照片" data-avatar-img>
+        {{ m.default_avatar('avatar-xl', hidden=true) }}
       {% else %}
-        <span class="avatar-fallback avatar-xl" aria-hidden="true">{{ (t.teacher_name or '師')[:1] }}</span>
+        {{ m.default_avatar('avatar-xl') }}
       {% endif %}
     </div>
     <div class="t-intro">
-      <p class="t-school">{% if t.county %}<span>{{ t.county }}</span>{% endif %}{{ t.school_name }}</p>
-      <h1>{{ t.teacher_name or '（尚未填寫姓名）' }}</h1>
+      {% if t.county or t.school_name %}<p class="t-school">{% if t.county %}<span>{{ t.county }}</span>{% endif %}{{ t.school_name }}</p>{% endif %}
+      {% if t.teacher_name %}<h1>{{ t.teacher_name }}</h1>{% endif %}
       {% if t.job_title %}<p class="t-title">{{ t.job_title }}</p>{% endif %}
       {% if t.slogan %}<blockquote class="t-slogan">{{ t.slogan }}</blockquote>{% endif %}
       {% if t.specialties %}
@@ -59,16 +61,19 @@
       </div>
     </div>
   </div>
+  {# 只顯示有內容的統計；全部為 0 時整列隱藏 #}
+  {% set stats = [('數位課程', t.courses|length), ('課堂照片', t.photos|length),
+                  ('獲獎', t.awards|length), ('認證', t.certifications|length)]|selectattr(1)|list %}
+  {% if stats %}
   <div class="container">
-    <dl class="t-stats">
-      <div><dt>數位課程</dt><dd>{{ t.courses|length }}</dd></div>
-      <div><dt>課堂照片</dt><dd>{{ t.photos|length }}</dd></div>
-      <div><dt>獲獎</dt><dd>{{ t.awards|length }}</dd></div>
-      <div><dt>認證</dt><dd>{{ t.certifications|length }}</dd></div>
+    <dl class="t-stats t-stats-{{ stats|length }}">
+      {% for label, n in stats %}<div><dt>{{ label }}</dt><dd>{{ n }}</dd></div>{% endfor %}
     </dl>
   </div>
+  {% endif %}
 </section>
 
+{% if t.philosophy or t.specialties or t.experiences or t.educations or t.courses or t.photos or t.awards or t.certifications %}
 <nav class="section-nav" aria-label="頁面導覽">
   <div class="container section-nav-inner">
     {% if t.philosophy %}<a href="#about">關於我</a>{% endif %}
@@ -79,6 +84,7 @@
     {% if t.awards or t.certifications %}<a href="#honors">獲獎與認證</a>{% endif %}
   </div>
 </nav>
+{% endif %}
 
 <div class="t-body">
   {% if t.philosophy %}

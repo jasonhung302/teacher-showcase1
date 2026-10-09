@@ -177,6 +177,8 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--p
 .teacher-card-slogan { margin: .4rem 0 0; color: var(--muted); font-size: .875rem; }
 .avatar-fallback { width: 96px; height: 96px; border-radius: 50%; display: grid; place-items: center; background: var(--primary); color: #fff; font-size: 2.4rem; font-weight: 700; }
 .avatar-xl { width: 100%; height: 100%; border-radius: 0; font-size: 4rem; }
+.avatar-fallback svg { width: 58%; height: 58%; fill: currentColor; opacity: .9; }
+.avatar-fallback[hidden] { display: none; }
 
 /* ---------------- 教師一頁網 */
 .preview-bar, .assist-bar { background: var(--accent-soft); border-bottom: 1px solid #f2d7a6; color: #6d4300; }
@@ -418,6 +420,7 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--p
 .t-stats { margin: 2.5rem 0 0; display: grid; grid-template-columns: repeat(4, 1fr); background: rgba(255,255,255,.08); border-top: 1px solid rgba(255,255,255,.15); border-radius: 14px 14px 0 0; }
 .t-stats div { padding: 1rem; text-align: center; }
 .t-stats div + div { border-left: 1px solid rgba(255,255,255,.12); }
+.t-stats-1 { grid-template-columns: 1fr; } .t-stats-2 { grid-template-columns: repeat(2, 1fr); } .t-stats-3 { grid-template-columns: repeat(3, 1fr); }
 .t-stats dt { font-size: .8rem; color: #e8f1f8; }
 .t-stats dd { margin: 0; font-size: 1.6rem; font-weight: 800; color: #fff; line-height: 1.3; }
 
@@ -541,6 +544,16 @@ body.no-scroll { overflow: hidden; }
 .cl-optional .cl-go { background: var(--surface-2); color: var(--ink-2); }
 .cl-edit { flex: none; font-size: .8rem; color: var(--muted); }
 .checklist-compact .cl-item { padding: .4rem 0; }
+.cl-tag-req { background: var(--danger-soft); color: var(--danger); }
+.cl-done .cl-tag-req { background: var(--ok-soft); color: var(--ok); }
+.cl-group { font-size: .95rem; margin: 1.25rem 0 0; }
+.cl-group + .checklist { margin-top: .4rem; }
+.cl-summary { display: grid; grid-template-columns: 1fr 1fr auto; gap: .75rem 1rem; margin: .75rem 0 0; align-items: end; }
+.cl-summary dt { font-size: .8rem; color: var(--ink-2); }
+.cl-summary dd { margin: 0 0 .3rem; font-size: 1.35rem; font-weight: 800; color: var(--primary); }
+.cl-summary-status dd { font-size: 1rem; }
+@media (max-width: 560px) { .cl-summary { grid-template-columns: 1fr; } }
+.problem-list { margin: .35rem 0; padding-left: 1.25rem; }
 .view-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: .5rem; margin: 0 0 .75rem; }
 .view-stats div { background: var(--surface-2); border-radius: 10px; padding: .6rem; text-align: center; }
 .view-stats dt { font-size: .78rem; color: var(--muted); }

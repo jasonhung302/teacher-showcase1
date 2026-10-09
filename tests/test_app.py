@@ -41,6 +41,11 @@ def jpeg_with_exif():
     return buf.getvalue()
 
 
+# t001 的完整必填基本資料（送出基本資料表單會覆寫所有欄位，發布前需帶齊必填欄位）
+T001_REQUIRED = {"county": "新北市", "school_name": "新北市板橋區示範國民小學", "teacher_name": "林怡君",
+                 "job_title": "五年級導師", "phone": "0912-345-678", "contact_email": "yijun.lin@example.edu.tw"}
+
+
 class Base(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.mkdtemp()
@@ -352,8 +357,7 @@ class PublishTests(Base):
 
     def test_draft_edits_not_visible_until_publish(self):
         self.login("t001")
-        self.post("/dashboard/profile", {"county": "新北市", "school_name": "新北市板橋區示範國民小學",
-                                         "teacher_name": "林怡君", "slogan": "全新的草稿標語"})
+        self.post("/dashboard/profile", {**T001_REQUIRED, "slogan": "全新的草稿標語"})
         visitor = self.app.test_client()
         self.assertNotIn("全新的草稿標語", visitor.get("/teacher/001").get_data(as_text=True))
         self.assertIn("全新的草稿標語", self.client.get("/dashboard/preview").get_data(as_text=True))
@@ -362,6 +366,69 @@ class PublishTests(Base):
         self.post("/dashboard/unpublish")
         self.assertEqual(visitor.get("/teacher/001").status_code, 404)
         self.assertNotIn("林怡君", visitor.get("/").get_data(as_text=True))
+
+    def _profile_id(self, code):
+        return self.db("SELECT id FROM teacher_profiles WHERE teacher_code = %s", (code,))[0][0]
+
+    def _clear_optional(self, code):
+        """清空所有選填資料（課程、教案、照片、理念、學歷、獲獎、認證）。"""
+        pid = self._profile_id(code)
+        for table in ("lesson_plans", "courses", "teacher_photos", "educations", "awards", "certifications"):
+            self.db(f"DELETE FROM {table} WHERE profile_id = %s", (pid,))
+        self.db("UPDATE teacher_profiles SET philosophy = '', slogan = '', avatar_file_id = NULL WHERE id = %s", (pid,))
+
+    def test_publish_with_only_required_fields(self):
+        """只完成必填、選填全部空白，仍可發布；公開頁不出現空白區塊，沒有照片時顯示預設人物圖示。"""
+        self._clear_optional("001")
+        self.login("t001")
+        self.post("/dashboard/unpublish")
+        overview = self.client.get("/dashboard/").get_data(as_text=True)
+        self.assertIn("符合發布條件", overview)
+        self.assertIn("發布必填完成度", overview)
+        self.assertIn("整體資料完整度", overview)
+        self.post("/dashboard/publish")
+        self.assertEqual(self.db("SELECT status FROM teacher_profiles WHERE teacher_code='001'")[0][0], "published")
+        html = self.app.test_client().get("/teacher/001").get_data(as_text=True)
+        self.assertIn("林怡君", html)
+        self.assertIn("avatar-fallback", html)
+        for empty in ('id="about"', 'id="courses"', 'id="photos"', 'id="honors"', "t-stats", "尚未填寫"):
+            self.assertNotIn(empty, html)
+        self.assertIn('id="specialties"', html)
+        self.assertNotIn("0912-345-678", html)
+        self.assertNotIn("yijun.lin@example.edu.tw", html)
+
+    def test_missing_required_blocks_publish(self):
+        """缺任何一項必填都不能發布（後端擋下，不只是按鈕停用），並說明缺什麼。"""
+        pid, other = self._profile_id("001"), self._profile_id("004")
+        # (破壞, 還原, 應提示的文字)；多筆資料以『暫時移到 t004 名下』模擬清空，之後再移回
+        cases = [(f"UPDATE teacher_profiles SET {col} = '' WHERE id = %s",
+                  f"UPDATE teacher_profiles SET {col} = '{val}' WHERE id = %s", label)
+                 for col, val, label in (("county", "新北市", "縣市"), ("school_name", "新北市板橋區示範國民小學", "學校全銜"),
+                                         ("job_title", "五年級導師", "職稱"), ("teacher_name", "林怡君", "姓名"),
+                                         ("phone", "0912-345-678", "手機"), ("contact_email", "y@example.edu.tw", "Email"))]
+        cases += [(f"UPDATE {t} SET profile_id = {other} WHERE profile_id = %s",
+                   f"UPDATE {t} SET profile_id = %s WHERE profile_id = {other}", label)
+                  for t, label in (("specialties", "教學專長"), ("teaching_experiences", "教學經歷"))]
+        self.login("t001")
+        self.post("/dashboard/unpublish")
+        for break_sql, restore_sql, label in cases:
+            with self.subTest(label=label):
+                self.db(break_sql, (pid,))
+                overview = self.client.get("/dashboard/").get_data(as_text=True)
+                self.assertIn(label, overview)
+                self.assertIn("尚缺 1 項必填", overview)
+                r = self.post("/dashboard/publish")
+                self.assertEqual(self.db("SELECT status FROM teacher_profiles WHERE id = %s", (pid,))[0][0], "draft")
+                self.assertIn(label, self.client.get(r.headers["Location"]).get_data(as_text=True))
+                self.db(restore_sql, (pid,))
+        self.post("/dashboard/publish")                                    # 全部還原後即可發布
+        self.assertEqual(self.db("SELECT status FROM teacher_profiles WHERE id = %s", (pid,))[0][0], "published")
+
+    def test_published_teacher_can_edit_optional(self):
+        self.login("t001")
+        self.post("/dashboard/profile", {**T001_REQUIRED, "slogan": "發布後修改的標語"})
+        self.post("/dashboard/publish")
+        self.assertIn("發布後修改的標語", self.app.test_client().get("/teacher/001").get_data(as_text=True))
 
     def test_unpublished_teacher_not_listed(self):
         html = self.client.get("/").get_data(as_text=True)
@@ -372,8 +439,7 @@ class PublishTests(Base):
     def test_xss_escaped(self):
         self.login("t001")
         payload = '<script>alert(1)</script>'
-        self.post("/dashboard/profile", {"county": "新北市", "school_name": "X", "teacher_name": "林怡君",
-                                         "philosophy": payload})
+        self.post("/dashboard/profile", {**T001_REQUIRED, "philosophy": payload})
         self.post("/dashboard/publish")
         html = self.app.test_client().get("/teacher/001").get_data(as_text=True)
         self.assertNotIn(payload, html)

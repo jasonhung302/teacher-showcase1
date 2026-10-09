@@ -15,8 +15,9 @@
     <div class="card side-card">
       <div class="side-status">
         {{ m.status_badge(profile.status, has_changes) }}
-        <p class="small muted">必填完成度 {{ pct }}%</p>
+        <p class="small muted">發布必填完成度 {{ pct }}%</p>
         {{ m.progress(pct) }}
+        <p class="small muted">整體資料完整度 {{ overall_pct }}%{% if not problems %}・<span class="text-ok">可發布</span>{% endif %}</p>
       </div>
       <nav class="side-nav" aria-label="編輯選單">
         {% set ep = request.endpoint.split('.')[-1] %}

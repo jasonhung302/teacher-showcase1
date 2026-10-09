@@ -41,6 +41,32 @@
   {% endif %}
 {% endmacro %}
 
+{% macro checklist_item(it, link=true) %}
+  {# 已完成：綠勾；必填未完成：醒目警示；選填未完成：淡色空心圈（不與必填警示混淆） #}
+  <li class="cl-item {{ 'cl-done' if it.done else ('cl-todo' if it.required else 'cl-optional') }}">
+    <span class="cl-icon" aria-hidden="true">{{ '✓' if it.done else ('!' if it.required else '○') }}</span>
+    <span class="cl-text">
+      <span class="cl-label">{{ it.label }}<span class="cl-tag {{ 'cl-tag-req' if it.required }}">{{ '必填' if it.required else '選填' }}</span></span>
+      {% if it.hint %}<span class="cl-hint">{{ it.hint }}</span>{% endif %}
+      <span class="sr-only">{{ '已完成' if it.done else ('必填，尚未完成' if it.required else '選填，尚未填寫') }}</span>
+    </span>
+    {% if link %}
+      {% if not it.done %}
+        <a class="cl-go" href="{{ it.url }}">前往填寫 <span aria-hidden="true">→</span><span class="sr-only">：{{ it.label }}</span></a>
+      {% else %}
+        <a class="cl-edit" href="{{ it.url }}">編輯<span class="sr-only">：{{ it.label }}</span></a>
+      {% endif %}
+    {% endif %}
+  </li>
+{% endmacro %}
+
+{% macro default_avatar(cls='', hidden=false) %}
+  {# 沒有個人照片（或照片載入失敗，見 app.js data-avatar-img）時顯示的預設人物圖示 #}
+  <span class="avatar-fallback {{ cls }}" aria-hidden="true"{% if hidden %} hidden{% endif %}>
+    <svg viewBox="0 0 64 64" focusable="false"><circle cx="32" cy="24" r="12"/><path d="M10 58c0-12.2 9.8-20 22-20s22 7.8 22 20z"/></svg>
+  </span>
+{% endmacro %}
+
 {% macro progress(pct) %}
   <div class="progress" role="progressbar" aria-valuenow="{{ pct }}" aria-valuemin="0" aria-valuemax="100">
     <div class="progress-bar progress-w-{{ (pct // 5) * 5 }}"></div>

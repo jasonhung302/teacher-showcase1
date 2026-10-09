@@ -7,7 +7,7 @@ import json
 import re
 import zipfile
 
-from tests.test_app import Base, png_bytes
+from tests.test_app import T001_REQUIRED, Base, png_bytes
 
 
 class AutosaveTests(Base):
@@ -170,8 +170,7 @@ class ImportTests(Base):
 class HistoryTests(Base):
     def test_restore_previous_version(self):
         self.login("t001")
-        base = {"county": "新北市", "school_name": "新北市板橋區示範國民小學", "teacher_name": "林怡君"}
-        self.post("/dashboard/profile", {**base, "slogan": "版本二"})
+        self.post("/dashboard/profile", {**T001_REQUIRED, "slogan": "版本二"})
         self.post("/dashboard/publish")
         visitor = self.app.test_client()
         self.assertIn("版本二", visitor.get("/teacher/001").get_data(as_text=True))

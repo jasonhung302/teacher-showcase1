@@ -39,7 +39,13 @@
       <p class="muted">目前為草稿，訪客看不到您的頁面。完成後請先預覽，再按「發布」。</p>
     {% endif %}
     {% if problems %}
-      <p class="callout callout-info">發布前需完成：{{ problems|join('、') }}</p>
+      <div class="callout callout-warn">
+        <p><strong>尚有 {{ problems|length }} 項必填資料未完成，完成後即可發布：</strong></p>
+        <ul class="problem-list">{% for p in problems %}<li>{{ p }}</li>{% endfor %}</ul>
+        <p class="small">選填項目不影響發布，可以之後再補。</p>
+      </div>
+    {% else %}
+      <p class="callout callout-ok">必填資料已完成，符合發布條件。選填項目可以隨時補充，補充後再按「重新發布」即可更新公開頁。</p>
     {% endif %}
     <div class="publish-actions">
       <a class="btn btn-ghost" href="{{ eurl('preview') }}" target="_blank" rel="noopener">預覽</a>
@@ -69,24 +75,30 @@
 
 <div class="grid-2 overview-grid">
   <section class="card" aria-labelledby="cl-title">
-    <h2 id="cl-title">完成清單 <span class="muted small">必填 {{ pct }}%</span></h2>
-    {{ m.progress(pct) }}
-    <ul class="checklist">
-      {% for it in checklist %}
-        <li class="cl-item {{ 'cl-done' if it.done else ('cl-todo' if it.required else 'cl-optional') }}">
-          <span class="cl-icon" aria-hidden="true">{{ '✓' if it.done else ('!' if it.required else '○') }}</span>
-          <span class="cl-text">
-            <span class="cl-label">{{ it.label }}{% if not it.required %}<span class="cl-tag">選填</span>{% endif %}</span>
-            {% if it.hint %}<span class="cl-hint">{{ it.hint }}</span>{% endif %}
-          </span>
-          {% if not it.done %}
-            <a class="cl-go" href="{{ it.url }}">前往填寫 <span aria-hidden="true">→</span><span class="sr-only">：{{ it.label }}</span></a>
-          {% else %}
-            <a class="cl-edit" href="{{ it.url }}">編輯<span class="sr-only">：{{ it.label }}</span></a>
-          {% endif %}
-        </li>
-      {% endfor %}
-    </ul>
+    <h2 id="cl-title">完成清單</h2>
+    <dl class="cl-summary">
+      <div>
+        <dt>發布必填完成度</dt><dd>{{ pct }}%</dd>
+        {{ m.progress(pct) }}
+      </div>
+      <div>
+        <dt>整體資料完整度 <span class="muted small">（參考用）</span></dt><dd>{{ overall_pct }}%</dd>
+        {{ m.progress(overall_pct) }}
+      </div>
+      <div class="cl-summary-status">
+        <dt>狀態</dt>
+        <dd>{% if problems %}<span class="badge badge-warn">尚缺 {{ problems|length }} 項必填</span>
+            {% else %}<span class="badge badge-ok">符合發布條件</span>{% endif %}</dd>
+      </div>
+    </dl>
+    {% for group, title in ((true, '必填項目'), (false, '選填項目')) %}
+      <h3 class="cl-group">{{ title }}{% if not group %} <span class="muted small">不影響發布</span>{% endif %}</h3>
+      <ul class="checklist">
+        {% for it in checklist if it.required == group %}
+          {{ m.checklist_item(it) }}
+        {% endfor %}
+      </ul>
+    {% endfor %}
   </section>
 
   <div class="stack">

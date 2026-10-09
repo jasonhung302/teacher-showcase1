@@ -66,13 +66,13 @@ ITEM_TYPES = {
 }
 
 PROFILE_FIELDS = [
-    # name, label, max, required_for_publish
+    # name, label, max, required_for_publish（發布檢查以 checklist() 的必填項目為準，此欄僅供標示）
     ("county", "縣市", 10, True),
     ("school_name", "學校全銜", 100, True),
     ("teacher_name", "講師姓名", 50, True),
-    ("job_title", "職稱", 50, False),
-    ("phone", "手機號碼", 20, False),
-    ("contact_email", "電子郵件", 120, False),
+    ("job_title", "職稱", 50, True),
+    ("phone", "手機號碼", 20, True),
+    ("contact_email", "電子郵件", 120, True),
     ("slogan", "Slogan", 60, False),
     ("philosophy", "教育理念", 1000, False),
 ]
@@ -195,12 +195,10 @@ def build_public_snapshot(profile_id):
     }
 
 
-def publish_problems(profile_id):
-    p = query("SELECT * FROM teacher_profiles WHERE id = %s", (profile_id,), one=True)
-    missing = [label for name, label, _m, req in PROFILE_FIELDS if req and not (p[name] or "").strip()]
-    if not query("SELECT 1 FROM courses WHERE profile_id = %s LIMIT 1", (profile_id,)):
-        missing.append("至少一門數位學習課程")
-    return missing
+def publish_problems(profile_id, items=None):
+    """發布前尚未完成的必填項目（含缺少的欄位）。發布按鈕與後端發布檢查共用這一份規則。"""
+    items = items if items is not None else checklist(profile_id)
+    return [i["label"] + (f"（{i['hint']}）" if i["hint"] else "") for i in items if i["required"] and not i["done"]]
 
 
 HISTORY_KEEP = 10
@@ -255,17 +253,22 @@ def has_unpublished_changes(p):
 
 
 def checklist(profile_id):
-    """可操作的完成度清單：每一項都有『必填／選填』與『前往填寫』的連結目標。"""
+    """可操作的完成度清單：每一項都有『必填／選填』與『前往填寫』的連結目標。
+
+    必填項目（基本資料、聯繫資料、教學專長、教學經歷）全部完成才能發布；
+    選填項目只影響『整體資料完整度』，不影響發布。
+    """
     p = query("SELECT * FROM teacher_profiles WHERE id = %s", (profile_id,), one=True)
 
     def has(table):
         return bool(query(f"SELECT 1 FROM {table} WHERE profile_id = %s LIMIT 1", (profile_id,)))
 
     courses = query("SELECT * FROM courses WHERE profile_id = %s", (profile_id,))
+    filled = lambda name: bool((p[name] or "").strip())  # noqa: E731
     basic_missing = [label for name, label in (("county", "縣市"), ("school_name", "學校全銜"),
-                                               ("teacher_name", "講師姓名"), ("job_title", "職稱"))
-                     if not p[name]]
-    contact_missing = [label for name, label in (("phone", "手機"), ("contact_email", "Email")) if not p[name]]
+                                               ("job_title", "職稱"), ("teacher_name", "姓名"))
+                     if not filled(name)]
+    contact_missing = [label for name, label in (("phone", "手機"), ("contact_email", "Email")) if not filled(name)]
     lacking = lambda field: [c["title"] for c in courses if not c[field]]  # noqa: E731
 
     items = [
@@ -273,23 +276,26 @@ def checklist(profile_id):
         ("basic", "基本資料", True, not basic_missing, "缺：" + "、".join(basic_missing), ("profile", {}, "public")),
         ("contact", "聯繫資料（不公開）", True, not contact_missing, "缺：" + "、".join(contact_missing),
          ("profile", {}, "contact")),
-        ("avatar", "個人照片", True, bool(p["avatar_file_id"]), "", ("profile", {}, "avatar")),
-        ("philosophy", "教育理念與 Slogan", True, bool(p["philosophy"]) and bool(p["slogan"]),
-         "缺：" + "、".join(x for x, ok in (("教育理念", p["philosophy"]), ("Slogan", p["slogan"])) if not ok),
+        ("specialties", "教學專長", True, has("specialties"), "至少填寫一項",
+         ("items", {"kind": "specialties"}, None)),
+        ("experiences", "教學經歷", True, has("teaching_experiences"), "至少填寫一筆",
+         ("items", {"kind": "experiences"}, None)),
+        # ---- 以下為選填 ----
+        ("avatar", "個人照片", False, bool(p["avatar_file_id"]), "", ("profile", {}, "avatar")),
+        ("philosophy", "教育理念與 Slogan", False, filled("philosophy") and filled("slogan"),
+         "缺：" + "、".join(x for x, n in (("教育理念", "philosophy"), ("Slogan", "slogan")) if not filled(n)),
          ("profile", {}, "public")),
-        ("specialties", "教學專長", True, has("specialties"), "", ("items", {"kind": "specialties"}, None)),
-        ("experiences", "教學經歷", True, has("teaching_experiences"), "", ("items", {"kind": "experiences"}, None)),
-        ("photos", "課堂照片", True, has("teacher_photos"), "", ("photos", {}, None)),
-        ("courses", "數位學習課程", True, bool(courses), "", ("courses", {}, None)),
-        ("course_content", "學習目標與課程介紹", True,
+        ("photos", "課堂照片", False, has("teacher_photos"), "", ("photos", {}, None)),
+        ("courses", "數位學習課程", False, bool(courses), "", ("courses", {}, None)),
+        ("course_content", "學習目標與課程介紹", False,
          bool(courses) and not [c for c in courses if not (c["objectives"] and c["intro"])],
          "未完成：" + "、".join(c["title"] for c in courses if not (c["objectives"] and c["intro"])),
          ("courses", {}, None)),
-        ("four", "四學運用", True, bool(courses) and not lacking("four_learning"),
+        ("four", "四學運用", False, bool(courses) and not lacking("four_learning"),
          "未完成：" + "、".join(lacking("four_learning")), ("courses", {}, None)),
-        ("ai", "AI 運用", True, bool(courses) and not lacking("ai_usage"),
+        ("ai", "AI 運用", False, bool(courses) and not lacking("ai_usage"),
          "未完成：" + "、".join(lacking("ai_usage")), ("courses", {}, None)),
-        ("plans", "完整教案", True, has("lesson_plans"), "", ("courses", {}, None)),
+        ("plans", "完整教案", False, has("lesson_plans"), "", ("courses", {}, None)),
         ("educations", "學歷", False, has("educations"), "", ("items", {"kind": "educations"}, None)),
         ("awards", "獲獎紀錄", False, has("awards"), "", ("items", {"kind": "awards"}, None)),
         ("certifications", "認證紀錄", False, has("certifications"), "", ("items", {"kind": "certifications"}, None)),
@@ -303,8 +309,21 @@ def checklist(profile_id):
     return out
 
 
-def completeness(profile_id):
-    """必填項目的完成百分比，回傳 (百分比, 尚缺的必填項目)。"""
-    items = [i for i in checklist(profile_id) if i["required"]]
-    done = sum(1 for i in items if i["done"])
-    return round(done * 100 / len(items)), [i["label"] for i in items if not i["done"]]
+def _pct(items):
+    return round(sum(1 for i in items if i["done"]) * 100 / len(items)) if items else 100
+
+
+def required_pct(items):
+    """發布必填完成度：只計算必填項目，100% 代表符合發布條件。"""
+    return _pct([i for i in items if i["required"]])
+
+
+def overall_pct(items):
+    """整體資料完整度：必填與選填全部計算，僅供參考，不用來判斷能否發布。"""
+    return _pct(items)
+
+
+def completeness(profile_id, items=None):
+    """發布必填完成度，回傳 (百分比, 尚缺的必填項目)。"""
+    items = items if items is not None else checklist(profile_id)
+    return required_pct(items), [i["label"] for i in items if i["required"] and not i["done"]]
