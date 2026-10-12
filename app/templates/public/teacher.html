@@ -73,12 +73,12 @@
   {% endif %}
 </section>
 
-{% if t.philosophy or t.specialties or t.experiences or t.educations or t.courses or t.photos or t.awards or t.certifications %}
+{% if t.philosophy or t.specialties or t.experiences or t.courses or t.photos or t.awards or t.certifications %}
 <nav class="section-nav" aria-label="頁面導覽">
   <div class="container section-nav-inner">
     {% if t.philosophy %}<a href="#about">關於我</a>{% endif %}
     {% if t.specialties %}<a href="#specialties">教學專長</a>{% endif %}
-    {% if t.experiences or t.educations %}<a href="#background">經歷與學歷</a>{% endif %}
+    {% if t.experiences %}<a href="#background">教學經歷</a>{% endif %}
     {% if t.courses %}<a href="#courses">數位課程成果</a>{% endif %}
     {% if t.photos %}<a href="#photos">課堂照片</a>{% endif %}
     {% if t.awards or t.certifications %}<a href="#honors">獲獎與認證</a>{% endif %}
@@ -115,40 +115,19 @@
   </section>
   {% endif %}
 
-  {% if t.experiences or t.educations %}
+  {% if t.experiences %}
   <section id="background" class="t-section">
     <div class="container">
-      <header class="t-section-head"><p class="eyebrow">Background</p><h2>經歷與學歷</h2></header>
-      <div class="grid-2 bg-grid">
-        {% if t.experiences %}
-        <div>
-          <h3 class="sub-head">教學經歷</h3>
-          <ol class="timeline">
-            {% for e in t.experiences %}
-              <li>
-                {% if e.period %}<span class="timeline-period">{{ e.period }}</span>{% endif %}
-                <strong>{{ e.organization }}</strong>{% if e.role %}<span class="timeline-role">{{ e.role }}</span>{% endif %}
-                {% if e.description %}<p class="muted small">{{ e.description|nl2br }}</p>{% endif %}
-              </li>
-            {% endfor %}
-          </ol>
-        </div>
-        {% endif %}
-        {% if t.educations %}
-        <div>
-          <h3 class="sub-head">學歷</h3>
-          <ol class="timeline">
-            {% for e in t.educations %}
-              <li>
-                {% if e.period %}<span class="timeline-period">{{ e.period }}</span>{% endif %}
-                <strong>{{ e.school }}</strong>
-                <span class="timeline-role">{{ e.department }}{% if e.degree %}　{{ e.degree }}{% endif %}</span>
-              </li>
-            {% endfor %}
-          </ol>
-        </div>
-        {% endif %}
-      </div>
+      <header class="t-section-head"><p class="eyebrow">Background</p><h2>教學經歷</h2></header>
+      <ol class="timeline">
+        {% for e in t.experiences %}
+          <li>
+            {% if e.period %}<span class="timeline-period">{{ e.period }}</span>{% endif %}
+            <strong>{{ e.organization }}</strong>{% if e.role %}<span class="timeline-role">{{ e.role }}</span>{% endif %}
+            {% if e.description %}<p class="muted small">{{ e.description|nl2br }}</p>{% endif %}
+          </li>
+        {% endfor %}
+      </ol>
     </div>
   </section>
   {% endif %}
