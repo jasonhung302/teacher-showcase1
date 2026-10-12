@@ -90,8 +90,6 @@ TEACHERS = [
                         slogan="讓每個孩子都成為會提問的學習者",
                         philosophy="我相信學習始於好奇。透過數位工具，讓學生從被動接收轉為主動探究，"
                                    "在小組合作中學會表達、傾聽與反思。\n科技只是工具，真正的目標是培養帶得走的能力。"),
-        "educations": [("國立臺北教育大學", "數學暨資訊教育學系", "碩士", "2012–2014"),
-                       ("國立臺北教育大學", "數學教育學系", "學士", "2008–2012")],
         "experiences": [("新北市板橋區示範國民小學", "五年級導師", "2016–迄今", "擔任資訊融入教學種子教師，帶領校內數位學習社群。"),
                         ("新北市數學輔導團", "輔導員", "2020–迄今", "辦理數學領域數位教學工作坊。")],
         "specialties": [("數學科差異化教學", "運用學習平台分析學習數據，提供分組任務。"),
@@ -115,7 +113,6 @@ TEACHERS = [
                         phone="0922-111-222", contact_email="chienhung@example.edu.tw",
                         slogan="用科技做實驗，用數據說故事",
                         philosophy="科學是一種看世界的方法。我希望學生能自己設計實驗、收集數據，並用證據說服別人。"),
-        "educations": [("國立彰化師範大學", "物理學系", "學士", "2006–2010")],
         "experiences": [("臺中市立示範國民中學", "自然科教師", "2011–迄今", ""),
                         ("臺中市立示範國民中學", "資訊組長", "2019–迄今", "")],
         "specialties": [("感測器探究實驗", "結合手機感測器進行物理量測。"), ("數據視覺化", "")],
@@ -133,13 +130,13 @@ TEACHERS = [
         "profile": dict(county="臺南市", school_name="臺南市示範國民小學", teacher_name="張雅婷", job_title="英語教師",
                         slogan="Learning English, Connecting the World", philosophy="",
                         phone="", contact_email=""),
-        "educations": [], "experiences": [], "specialties": [("英語繪本共讀", "")],
+        "experiences": [], "specialties": [("英語繪本共讀", "")],
         "awards": [], "certifications": [], "courses": [],
     },
     {
         "username": "t004", "code": "004", "publish": False, "must_change": 1,
         "profile": dict(teacher_name="黃志明"),
-        "educations": [], "experiences": [], "specialties": [], "awards": [], "certifications": [], "courses": [],
+        "experiences": [], "specialties": [], "awards": [], "certifications": [], "courses": [],
     },
 ]
 
@@ -181,9 +178,6 @@ def seed(app):
                     fid = store(pid, uid, "class_photo", classroom_png(idx * 3 + k), "png", "image/png", f"class{k}.png")
                     execute("INSERT INTO teacher_photos (profile_id, file_id, caption, sort_order, created_at)"
                             " VALUES (%s, %s, %s, %s, %s)", (pid, fid, ["小組協作討論", "平板即時回饋", "成果發表"][k], k, ts()))
-            for i, r in enumerate(t["educations"]):
-                execute("INSERT INTO educations (profile_id, school, department, degree, period, sort_order, created_at)"
-                        " VALUES (%s, %s, %s, %s, %s, %s, %s)", (pid, *r, i, ts()))
             for i, r in enumerate(t["experiences"]):
                 execute("INSERT INTO teaching_experiences (profile_id, organization, role, period, description,"
                         " sort_order, created_at) VALUES (%s, %s, %s, %s, %s, %s, %s)", (pid, *r, i, ts()))

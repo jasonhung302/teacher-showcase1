@@ -273,6 +273,7 @@ class PermissionTests(Base):
 
     def test_unknown_item_kind_rejected(self):
         self.login("t001")
+        self.assertEqual(self.client.get("/dashboard/items/educations").status_code, 404)   # 學歷已移除
         self.assertEqual(self.client.get("/dashboard/items/users").status_code, 404)
 
     def test_teacher_cannot_read_other_draft_files(self):
@@ -371,9 +372,9 @@ class PublishTests(Base):
         return self.db("SELECT id FROM teacher_profiles WHERE teacher_code = %s", (code,))[0][0]
 
     def _clear_optional(self, code):
-        """清空所有選填資料（課程、教案、照片、理念、學歷、獲獎、認證）。"""
+        """清空所有選填資料（課程、教案、照片、理念、獲獎、認證）。"""
         pid = self._profile_id(code)
-        for table in ("lesson_plans", "courses", "teacher_photos", "educations", "awards", "certifications"):
+        for table in ("lesson_plans", "courses", "teacher_photos", "awards", "certifications"):
             self.db(f"DELETE FROM {table} WHERE profile_id = %s", (pid,))
         self.db("UPDATE teacher_profiles SET philosophy = '', slogan = '', avatar_file_id = NULL WHERE id = %s", (pid,))
 

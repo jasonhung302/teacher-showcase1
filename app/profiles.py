@@ -19,16 +19,8 @@ SUBJECTS = ["國語文", "英語文", "本土語文", "數學", "自然科學", 
 
 # ---------------------------------------------------------------- 多筆資料類型（設定驅動）
 # 資料表名稱只從此白名單取得，絕不由使用者輸入組 SQL。
+# 「學歷」已不再請老師填寫：educations 資料表與既有資料保留在資料庫，但不再編輯、計分或公開。
 ITEM_TYPES = {
-    "educations": {
-        "table": "educations", "label": "學歷", "title_field": "school",
-        "fields": [
-            {"name": "school", "label": "學校", "required": True, "max": 100},
-            {"name": "department", "label": "系所", "max": 100},
-            {"name": "degree", "label": "學位", "type": "select", "options": ["學士", "碩士", "博士", "其他"]},
-            {"name": "period", "label": "就讀期間", "max": 40, "placeholder": "例：2008–2012"},
-        ],
-    },
     "experiences": {
         "table": "teaching_experiences", "label": "教學經歷", "title_field": "organization",
         "fields": [
@@ -183,7 +175,6 @@ def build_public_snapshot(profile_id):
         "avatar": avatar,
         "avatar_thumb": avatar_thumb,
         "photos": photos,
-        "educations": pick(load_items("educations", profile_id), ["school", "department", "degree", "period"]),
         "experiences": pick(load_items("experiences", profile_id), ["organization", "role", "period", "description"]),
         "specialties": pick(load_items("specialties", profile_id), ["name", "description"]),
         "awards": pick(load_items("awards", profile_id), ["title", "issuer", "award_date", "description"]),
@@ -296,7 +287,6 @@ def checklist(profile_id):
         ("ai", "AI 運用", False, bool(courses) and not lacking("ai_usage"),
          "未完成：" + "、".join(lacking("ai_usage")), ("courses", {}, None)),
         ("plans", "完整教案", False, has("lesson_plans"), "", ("courses", {}, None)),
-        ("educations", "學歷", False, has("educations"), "", ("items", {"kind": "educations"}, None)),
         ("awards", "獲獎紀錄", False, has("awards"), "", ("items", {"kind": "awards"}, None)),
         ("certifications", "認證紀錄", False, has("certifications"), "", ("items", {"kind": "certifications"}, None)),
     ]

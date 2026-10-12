@@ -680,16 +680,13 @@ def export_xlsx():
           course_rows, {k: 45 for k in ("學習目標", "課程介紹", "四學運用", "AI 運用")})
     bg = []
     for p in profiles:
-        for e in load_items("educations", p["id"]):
-            bg.append([p["teacher_code"], p["teacher_name"], "學歷", f"{e['school']} {e['department'] or ''}",
-                       e["degree"], e["period"]])
         for e in load_items("experiences", p["id"]):
             bg.append([p["teacher_code"], p["teacher_name"], "經歷", e["organization"], e["role"], e["period"]])
         for a in load_items("awards", p["id"]):
             bg.append([p["teacher_code"], p["teacher_name"], "獲獎", a["title"], a["issuer"], a["award_date"]])
         for c in load_items("certifications", p["id"]):
             bg.append([p["teacher_code"], p["teacher_name"], "認證", c["name"], c["issuer"], c["cert_date"]])
-    sheet("學經歷與獲獎", ["代碼", "講師姓名", "類別", "名稱", "職務/學位/單位", "期間/日期"], bg, {"名稱": 40})
+    sheet("學經歷與獲獎", ["代碼", "講師姓名", "類別", "名稱", "職務/單位", "期間/日期"], bg, {"名稱": 40})
     sheet("聯繫與進度（內部）", ["代碼", "講師姓名", "帳號", "手機", "Email", "完成度", "尚缺項目", "發布狀態",
                          "最後更新", "最後登入", "帳號狀態"],
           [[p["teacher_code"], p["teacher_name"], p["username"], p["phone"], p["contact_email"],
