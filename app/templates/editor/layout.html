@@ -17,7 +17,8 @@
         {{ m.status_badge(profile.status, has_changes) }}
         <p class="small muted">發布必填完成度 {{ pct }}%</p>
         {{ m.progress(pct) }}
-        <p class="small muted">整體資料完整度 {{ overall_pct }}%{% if not problems %}・<span class="text-ok">可發布</span>{% endif %}</p>
+        {% if overall_pct != pct %}<p class="small muted">整體資料完整度 {{ overall_pct }}%</p>{% endif %}
+        {% if not problems %}<p class="small text-ok">符合發布條件</p>{% endif %}
       </div>
       <nav class="side-nav" aria-label="編輯選單">
         {% set ep = request.endpoint.split('.')[-1] %}

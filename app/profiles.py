@@ -65,8 +65,8 @@ PROFILE_FIELDS = [
     ("job_title", "職稱", 50, True),
     ("phone", "手機號碼", 20, True),
     ("contact_email", "電子郵件", 120, True),
-    ("slogan", "Slogan", 60, False),
-    ("philosophy", "教育理念", 1000, False),
+    ("slogan", "Slogan", 60, True),
+    ("philosophy", "教育理念", 1000, True),
 ]
 
 COURSE_FIELDS = [
@@ -246,8 +246,8 @@ def has_unpublished_changes(p):
 def checklist(profile_id):
     """可操作的完成度清單：每一項都有『必填／選填』與『前往填寫』的連結目標。
 
-    必填項目（基本資料、聯繫資料、教學專長、教學經歷）全部完成才能發布；
-    選填項目只影響『整體資料完整度』，不影響發布。
+    必填項目（required=True）全部完成才能發布；選填項目只影響『整體資料完整度』，不影響發布。
+    目前清單上的項目全部為必填。
     """
     p = query("SELECT * FROM teacher_profiles WHERE id = %s", (profile_id,), one=True)
 
@@ -271,24 +271,24 @@ def checklist(profile_id):
          ("items", {"kind": "specialties"}, None)),
         ("experiences", "教學經歷", True, has("teaching_experiences"), "至少填寫一筆",
          ("items", {"kind": "experiences"}, None)),
-        # ---- 以下為選填 ----
-        ("avatar", "個人照片", False, bool(p["avatar_file_id"]), "", ("profile", {}, "avatar")),
-        ("philosophy", "教育理念與 Slogan", False, filled("philosophy") and filled("slogan"),
+        # ---- 原本為選填，依需求改為必填（第三個值改回 False 即恢復選填） ----
+        ("avatar", "個人照片", True, bool(p["avatar_file_id"]), "", ("profile", {}, "avatar")),
+        ("philosophy", "教育理念與 Slogan", True, filled("philosophy") and filled("slogan"),
          "缺：" + "、".join(x for x, n in (("教育理念", "philosophy"), ("Slogan", "slogan")) if not filled(n)),
          ("profile", {}, "public")),
-        ("photos", "課堂照片", False, has("teacher_photos"), "", ("photos", {}, None)),
-        ("courses", "數位學習課程", False, bool(courses), "", ("courses", {}, None)),
-        ("course_content", "學習目標與課程介紹", False,
+        ("photos", "課堂照片", True, has("teacher_photos"), "", ("photos", {}, None)),
+        ("courses", "數位學習課程", True, bool(courses), "", ("courses", {}, None)),
+        ("course_content", "學習目標與課程介紹", True,
          bool(courses) and not [c for c in courses if not (c["objectives"] and c["intro"])],
          "未完成：" + "、".join(c["title"] for c in courses if not (c["objectives"] and c["intro"])),
          ("courses", {}, None)),
-        ("four", "四學運用", False, bool(courses) and not lacking("four_learning"),
+        ("four", "四學運用", True, bool(courses) and not lacking("four_learning"),
          "未完成：" + "、".join(lacking("four_learning")), ("courses", {}, None)),
-        ("ai", "AI 運用", False, bool(courses) and not lacking("ai_usage"),
+        ("ai", "AI 運用", True, bool(courses) and not lacking("ai_usage"),
          "未完成：" + "、".join(lacking("ai_usage")), ("courses", {}, None)),
-        ("plans", "完整教案", False, has("lesson_plans"), "", ("courses", {}, None)),
-        ("awards", "獲獎紀錄", False, has("awards"), "", ("items", {"kind": "awards"}, None)),
-        ("certifications", "認證紀錄", False, has("certifications"), "", ("items", {"kind": "certifications"}, None)),
+        ("plans", "完整教案", True, has("lesson_plans"), "", ("courses", {}, None)),
+        ("awards", "獲獎紀錄", True, has("awards"), "", ("items", {"kind": "awards"}, None)),
+        ("certifications", "認證紀錄", True, has("certifications"), "", ("items", {"kind": "certifications"}, None)),
     ]
     out = []
     for key, label, required, done, hint, target in items:

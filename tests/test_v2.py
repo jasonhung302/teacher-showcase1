@@ -289,7 +289,7 @@ class DashboardTests(Base):
         html = self.client.get("/dashboard/").get_data(as_text=True)
         self.assertIn("前往填寫", html)
         self.assertIn("/dashboard/profile#avatar", html)
-        self.assertIn("選填", html)
+        self.assertIn("必填", html)
 
     def test_xlsx_export_sheets(self):
         from openpyxl import load_workbook
