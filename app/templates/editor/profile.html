@@ -30,11 +30,11 @@
         <input id="job_title" name="job_title" value="{{ form.job_title or '' }}" maxlength="50" placeholder="例：五年級導師、資訊組長">
       </div>
       <div class="field field-wide">
-        <label for="slogan">Slogan</label>
+        <label for="slogan">Slogan <span class="req">*</span></label>
         <input id="slogan" name="slogan" value="{{ form.slogan or '' }}" maxlength="60" placeholder="一句話代表您的教學" data-count>
       </div>
       <div class="field field-wide">
-        <label for="philosophy">教育理念</label>
+        <label for="philosophy">教育理念 <span class="req">*</span></label>
         <textarea id="philosophy" name="philosophy" rows="6" maxlength="1000" data-count>{{ form.philosophy or '' }}</textarea>
       </div>
     </div>

@@ -86,7 +86,7 @@
 
   <div class="card">
     <h2>資料完成度</h2>
-    <p class="small muted">發布必填完成度 {{ pct }}%・整體資料完整度 {{ overall_pct }}%
+    <p class="small muted">發布必填完成度 {{ pct }}%{% if overall_pct != pct %}・整體資料完整度 {{ overall_pct }}%{% endif %}
       {% if pct == 100 %}<span class="badge badge-ok">符合發布條件</span>{% else %}<span class="badge badge-warn">必填未完成</span>{% endif %}</p>
     {{ m.progress(pct) }}
     <ul class="checklist checklist-compact">

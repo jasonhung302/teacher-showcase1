@@ -372,24 +372,28 @@ class PublishTests(Base):
         return self.db("SELECT id FROM teacher_profiles WHERE teacher_code = %s", (code,))[0][0]
 
     def _clear_optional(self, code):
-        """清空所有選填資料（課程、教案、照片、理念、獲獎、認證）。"""
+        """清空原本為選填的資料（課程、教案、照片、理念、獲獎、認證）。"""
         pid = self._profile_id(code)
         for table in ("lesson_plans", "courses", "teacher_photos", "awards", "certifications"):
             self.db(f"DELETE FROM {table} WHERE profile_id = %s", (pid,))
         self.db("UPDATE teacher_profiles SET philosophy = '', slogan = '', avatar_file_id = NULL WHERE id = %s", (pid,))
 
-    def test_publish_with_only_required_fields(self):
-        """只完成必填、選填全部空白，仍可發布；公開頁不出現空白區塊，沒有照片時顯示預設人物圖示。"""
+    def test_all_checklist_items_required(self):
+        """清單上所有項目都是必填：缺照片、理念、課程、獲獎、認證等任一項都不能（重新）發布；
+        已發布的公開頁不會因此被下架；預覽仍不出現空白區塊，沒有照片時顯示預設人物圖示。"""
         self._clear_optional("001")
         self.login("t001")
-        self.post("/dashboard/unpublish")
         overview = self.client.get("/dashboard/").get_data(as_text=True)
-        self.assertIn("符合發布條件", overview)
-        self.assertIn("發布必填完成度", overview)
-        self.assertIn("整體資料完整度", overview)
+        self.assertNotIn("選填", overview)
+        self.assertNotIn("整體資料完整度", overview)
+        for label in ("個人照片", "教育理念與 Slogan", "課堂照片", "數位學習課程", "完整教案", "獲獎紀錄", "認證紀錄"):
+            self.assertIn(label, overview)
+        published_before = self.db("SELECT published_snapshot FROM teacher_profiles WHERE teacher_code='001'")[0][0]
         self.post("/dashboard/publish")
-        self.assertEqual(self.db("SELECT status FROM teacher_profiles WHERE teacher_code='001'")[0][0], "published")
-        html = self.app.test_client().get("/teacher/001").get_data(as_text=True)
+        self.assertEqual(self.db("SELECT published_snapshot FROM teacher_profiles WHERE teacher_code='001'")[0][0],
+                         published_before)                                 # 被擋下，公開頁維持原版本
+        self.assertEqual(self.app.test_client().get("/teacher/001").status_code, 200)
+        html = self.client.get("/dashboard/preview").get_data(as_text=True)
         self.assertIn("林怡君", html)
         self.assertIn("avatar-fallback", html)
         for empty in ('id="about"', 'id="courses"', 'id="photos"', 'id="honors"', "t-stats", "尚未填寫"):
