@@ -379,13 +379,13 @@ class PublishTests(Base):
         self.db("UPDATE teacher_profiles SET philosophy = '', slogan = '', avatar_file_id = NULL WHERE id = %s", (pid,))
 
     def test_all_checklist_items_required(self):
-        """清單上所有項目都是必填：缺照片、理念、課程、獲獎、認證等任一項都不能（重新）發布；
+        """除獲獎紀錄外都是必填：缺照片、理念、課程、認證等任一項都不能（重新）發布；
         已發布的公開頁不會因此被下架；預覽仍不出現空白區塊，沒有照片時顯示預設人物圖示。"""
         self._clear_optional("001")
         self.login("t001")
         overview = self.client.get("/dashboard/").get_data(as_text=True)
-        self.assertNotIn("選填", overview)
-        self.assertNotIn("整體資料完整度", overview)
+        self.assertIn("選填項目", overview)                               # 只剩獲獎紀錄為選填
+        self.assertIn("整體資料完整度", overview)
         for label in ("個人照片", "教育理念與 Slogan", "課堂照片", "數位學習課程", "完整教案", "獲獎紀錄", "認證紀錄"):
             self.assertIn(label, overview)
         published_before = self.db("SELECT published_snapshot FROM teacher_profiles WHERE teacher_code='001'")[0][0]
@@ -401,6 +401,16 @@ class PublishTests(Base):
         self.assertIn('id="specialties"', html)
         self.assertNotIn("0912-345-678", html)
         self.assertNotIn("yijun.lin@example.edu.tw", html)
+
+    def test_awards_optional(self):
+        """沒有獲獎紀錄也能發布。"""
+        self.db("DELETE FROM awards WHERE profile_id = %s", (self._profile_id("001"),))
+        self.login("t001")
+        self.post("/dashboard/unpublish")
+        self.assertIn("符合發布條件", self.client.get("/dashboard/").get_data(as_text=True))
+        self.post("/dashboard/publish")
+        self.assertEqual(self.db("SELECT status FROM teacher_profiles WHERE teacher_code='001'")[0][0], "published")
+        self.assertNotIn('<span class="honor-kind">獲獎</span>', self.app.test_client().get("/teacher/001").get_data(as_text=True))
 
     def test_missing_required_blocks_publish(self):
         """缺任何一項必填都不能發布（後端擋下，不只是按鈕停用），並說明缺什麼。"""

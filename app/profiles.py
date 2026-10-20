@@ -247,7 +247,7 @@ def checklist(profile_id):
     """可操作的完成度清單：每一項都有『必填／選填』與『前往填寫』的連結目標。
 
     必填項目（required=True）全部完成才能發布；選填項目只影響『整體資料完整度』，不影響發布。
-    目前清單上的項目全部為必填。
+    目前除了「獲獎紀錄」為選填外，其餘項目皆為必填。
     """
     p = query("SELECT * FROM teacher_profiles WHERE id = %s", (profile_id,), one=True)
 
@@ -287,8 +287,9 @@ def checklist(profile_id):
         ("ai", "AI 運用", True, bool(courses) and not lacking("ai_usage"),
          "未完成：" + "、".join(lacking("ai_usage")), ("courses", {}, None)),
         ("plans", "完整教案", True, has("lesson_plans"), "", ("courses", {}, None)),
-        ("awards", "獲獎紀錄", True, has("awards"), "", ("items", {"kind": "awards"}, None)),
         ("certifications", "認證紀錄", True, has("certifications"), "", ("items", {"kind": "certifications"}, None)),
+        # ---- 選填（不是每位老師都有獲獎經歷） ----
+        ("awards", "獲獎紀錄", False, has("awards"), "", ("items", {"kind": "awards"}, None)),
     ]
     out = []
     for key, label, required, done, hint, target in items:
