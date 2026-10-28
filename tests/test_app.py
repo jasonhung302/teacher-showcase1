@@ -187,54 +187,43 @@ class AuthTests(Base):
         r = self.client.get(link)
         self.assertEqual(r.status_code, 302)
 
-    def test_contact_email_fills_account_email(self):
-        """管理員未設帳號 Email 時，老師自己填的 Email 會成為忘記密碼的收信信箱。"""
-        self.assertIsNone(self.db("SELECT email FROM users WHERE username='t003'")[0][0])
-        self.login("t003")
-        base = {"county": "新北市", "school_name": "X", "teacher_name": "王小明"}
-        # 自動儲存不寫入帳號 Email（避免存到打到一半的 Email）
-        self.post("/dashboard/autosave/profile", {**base, "contact_email": "new.teacher@example.co"})
-        self.assertIsNone(self.db("SELECT email FROM users WHERE username='t003'")[0][0])
-        # 按「儲存草稿」才寫入
-        self.post("/dashboard/profile", {**base, "contact_email": "new.teacher@example.com"})
-        self.assertEqual(self.db("SELECT email FROM users WHERE username='t003'")[0][0], "new.teacher@example.com")
-        # 寫入後老師再改不會變更帳號 Email
-        self.post("/dashboard/profile", {**base, "contact_email": "other@example.com"})
-        self.assertEqual(self.db("SELECT email FROM users WHERE username='t003'")[0][0], "new.teacher@example.com")
-        token = self.csrf(client=self.app.test_client(), path="/forgot-password")
+    def _forgot(self, identifier):
+        """送出忘記密碼，回傳寄信 log（未設 SMTP 時信件內容寫入 log）。"""
+        c = self.app.test_client()
+        token = self.csrf(client=c, path="/forgot-password")
         with self.assertLogs(self.app.logger, "WARNING") as logs:
-            self.app.test_client().post("/forgot-password", data={"identifier": "new.teacher@example.com",
-                                                                  "csrf_token": token})
-        self.assertIn("new.teacher@example.com", "\n".join(logs.output))
+            self.app.logger.warning("start")
+            c.post("/forgot-password", data={"identifier": identifier, "csrf_token": token})
+        return "\n".join(logs.output)
 
-    def test_contact_email_filled_on_publish(self):
-        self.db("UPDATE teacher_profiles SET contact_email = 'pub@example.com' WHERE teacher_code = '001'")
-        self.db("UPDATE users SET email = NULL WHERE username='t001'")
-        self.login("t001")
-        self.post("/dashboard/publish")
-        self.assertEqual(self.db("SELECT email FROM users WHERE username='t001'")[0][0], "pub@example.com")
-
-    def test_fill_account_emails_cli(self):
-        self.db("UPDATE teacher_profiles SET contact_email = 'cli@example.com' WHERE teacher_code = '001'")
-        self.db("UPDATE users SET email = NULL WHERE username='t001'")
-        out = self.app.test_cli_runner().invoke(args=["fill-account-emails"]).output
-        self.assertIn("已補上 1 位", out)
-        self.assertEqual(self.db("SELECT email FROM users WHERE username='t001'")[0][0], "cli@example.com")
-
-    def test_contact_email_does_not_override_admin_email(self):
-        self.db("UPDATE users SET email = 'admin.set@example.edu.tw' WHERE username='t001'")
-        self.login("t001")
-        self.post("/dashboard/profile", {"county": "新北市", "school_name": "X", "teacher_name": "林怡君",
-                                         "contact_email": "changed@example.com"})
-        self.assertEqual(self.db("SELECT email FROM users WHERE username='t001'")[0][0], "admin.set@example.edu.tw")
-
-    def test_contact_email_taken_by_other_account_not_synced(self):
-        taken = self.db("SELECT email FROM users WHERE username='t001'")[0][0]
-        self.login("t003")
-        r = self.post("/dashboard/profile", {"county": "新北市", "school_name": "X", "teacher_name": "王小明",
-                                             "contact_email": taken})
+    def test_forgot_password_sends_to_teacher_own_email(self):
+        """重設信寄到老師自己填的 Email（不需要先存檔或發布），可用帳號或該 Email 申請；改了 Email 就寄到新的。"""
         self.assertIsNone(self.db("SELECT email FROM users WHERE username='t003'")[0][0])
-        self.assertIn("已被其他帳號使用", self.client.get(r.headers["Location"]).get_data(as_text=True))
+        self.db("UPDATE teacher_profiles SET contact_email = 'own@example.com' WHERE teacher_code = '003'")
+        self.assertIn("To: own@example.com", self._forgot("t003"))
+        self.assertIn("To: own@example.com", self._forgot("own@example.com"))
+        self.db("UPDATE teacher_profiles SET contact_email = 'changed@example.com' WHERE teacher_code = '003'")
+        out = self._forgot("t003")
+        self.assertIn("To: changed@example.com", out)
+        self.assertNotIn("own@example.com", out)
+
+    def test_forgot_password_prefers_teacher_email_over_admin_email(self):
+        self.db("UPDATE users SET email = 'admin.set@example.edu.tw' WHERE username='t001'")
+        self.db("UPDATE teacher_profiles SET contact_email = 'teacher.set@example.com' WHERE teacher_code = '001'")
+        out = self._forgot("t001")
+        self.assertIn("To: teacher.set@example.com", out)
+        self.assertNotIn("admin.set@example.edu.tw", out)
+        # 老師沒填時，才寄到管理員設定的帳號 Email
+        self.db("UPDATE teacher_profiles SET contact_email = '' WHERE teacher_code = '001'")
+        self.assertIn("To: admin.set@example.edu.tw", self._forgot("t001"))
+
+    def test_forgot_password_without_any_email_sends_nothing(self):
+        """沒有任何 Email 的老師不會寄信，也不建立重設連結（由管理員在後台重設）。"""
+        self.db("UPDATE teacher_profiles SET contact_email = '' WHERE teacher_code = '004'")
+        self.db("UPDATE users SET email = NULL WHERE username='t004'")
+        self.assertNotIn("重設密碼", self._forgot("t004"))
+        self.assertEqual(self.db("SELECT count(*) FROM password_resets r JOIN users u ON u.id = r.user_id"
+                                 " WHERE u.username = 't004'")[0][0], 0)
 
     def test_forgot_password_without_smtp_asks_admin(self):
         """沒有設定 SMTP 時，忘記密碼頁請老師找管理員，不建立重設連結。"""
