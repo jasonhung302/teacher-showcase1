@@ -233,4 +233,3 @@ class IpRateLimiter:
 
 
 login_limiter = IpRateLimiter(limit=20, window_seconds=600)
-forgot_limiter = IpRateLimiter(limit=5, window_seconds=600)

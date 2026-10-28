@@ -88,7 +88,7 @@ python -m unittest discover -s tests -t . -v
 | `flask --app wsgi backup` | 建立備份（存在 `instance/backups/`，保留最近 14 份） |
 | `flask --app wsgi restore-backup <zip>` | 從備份還原（請先停止網站；目前資料會先自動另存） |
 
-忘記密碼：未設定 SMTP 時，正式環境的忘記密碼頁會請老師聯絡管理員重設（不會假裝已寄出）；開發或測試模式下，重設連結會印在伺服器終端機的 log 中，方便測試。
+忘記密碼：登入頁的「忘記密碼？」會請老師聯絡系統管理員；管理員在後台該老師頁面按「重設密碼」產生臨時密碼（只顯示一次），老師登入後會被要求設定新密碼。
 
 ---
 
@@ -171,14 +171,14 @@ waitress-serve --host 127.0.0.1 --port 8000 wsgi:app
 - 改用 `Dockerfile` 以容器部署時，另外設定 `WEBSITES_PORT=8000` 與 `WEBSITES_ENABLE_APP_SERVICE_STORAGE=true`（後者讓 `/home` 持久化）。
 - 後台的「備份」會存到 `/home/data/backups/`，內容包含資料庫與上傳檔；建議定期下載一份到其他地方。
 - 原本已存在 `/home/data/uploads` 的檔案，設定好儲存體連線字串後在 App Service 的 SSH 執行一次 `flask --app wsgi upload-to-azure` 即可搬到 Blob Storage（已存在的會略過，可重複執行）。
-- 忘記密碼的重設信會寄到老師自己在基本資料填的 Email（沒填才用管理員設定的帳號 Email）；兩者都沒有的老師，由管理員在後台「重設密碼」。寄信需設定 `SMTP_*` 環境變數。
+- 忘記密碼一律由管理員在後台「重設密碼」，不需要設定寄信。`SMTP_*` 只用於管理後台的「寄送提醒信」，不設定也不影響其他功能。
 - 未設定 `AZURE_STORAGE_CONNECTION_STRING` 時（本機開發、測試），上傳檔照舊存在 `UPLOAD_FOLDER`。
 
 ### 上線檢查清單
 - [ ] `SECRET_KEY` 為長隨機字串（未設定時每次重啟所有人都會被登出）
 - [ ] 全站 HTTPS，`COOKIE_SECURE=1`、`TRUST_PROXY=1`
 - [ ] 未執行 `seed-demo`，或已更換所有示範密碼
-- [ ] SMTP 已設定（否則老師忘記密碼需由管理員重設）
+- [ ] （選用）SMTP 已設定，才能在管理後台寄送提醒信
 - [ ] Nginx `client_max_body_size` ≥ PDF 上限 + 2 MB
 - [ ] 已設定每日備份（`deploy/backup.sh` 或 Windows 工作排程器執行 `python -m flask --app wsgi backup`），並定期把備份檔複製到其他地方
 - [ ] `env.json` 的 `BASE_URL` 已設為正式網址（QR Code、分享連結、社群預覽圖都會用到）

@@ -41,7 +41,7 @@
 | 模組 | 功能 |
 |---|---|
 | 公開網站 | 首頁教師卡片、依關鍵字/縣市/領域/學校搜尋、教師一頁網 `/teacher/001`、教案下載 |
-| 登入系統 | 登入、登出、忘記密碼（Email 連結 30 分鐘有效）、修改密碼、首次登入強制改密碼、登入失敗 5 次鎖 15 分鐘 |
+| 登入系統 | 登入、登出、忘記密碼（請洽管理員重設）、修改密碼、首次登入強制改密碼、登入失敗 5 次鎖 15 分鐘 |
 | 教師後台 | 基本資料、個人照片、課堂照片、經歷、專長、獲獎、認證、數位課程、教案/教材上傳、發布必填完成度與整體資料完整度、預覽、發布/取消發布 |
 | 管理後台 | 新增/編輯/停用/啟用教師、重設密碼（產生一次性臨時密碼）、所有教師完成度/發布狀態/最後修改時間、協助編輯、CSV 匯出（會場手冊用）、操作紀錄 |
 
@@ -55,8 +55,7 @@
 ├── /teacher/<代碼>                 教師一頁網（只顯示已發布快照）
 ├── /files/<隨機檔名>               圖片 / PDF（依權限送出）
 ├── /login                          登入
-├── /forgot-password                忘記密碼
-└── /reset-password/<token>         重設密碼
+└── /forgot-password                忘記密碼（請洽管理員）
 
 登入後（共用）
 └── /account/password               修改密碼（首次登入強制）
@@ -122,10 +121,9 @@
 
 **忘記密碼**
 ```
-/forgot-password 輸入帳號或 Email → 不論帳號是否存在都顯示相同訊息
-→ Email 收到 30 分鐘有效、只能用一次的連結 → 設定新密碼 → 所有裝置登出
-（重設信寄到老師自己在基本資料填的 Email；沒填才用管理員設定的帳號 Email）
-（沒有 Email 的老師 → 請管理員「重設密碼」）
+/forgot-password 顯示「請聯絡系統管理員協助重設密碼」（網站不寄送重設信）
+→ 管理員在後台按「重設密碼」產生臨時密碼（只顯示一次）交給老師
+→ 老師以臨時密碼登入 → 強制設定新密碼
 ```
 
 **訪客**
@@ -176,7 +174,7 @@ erDiagram
 | password_hash | TEXT | scrypt 雜湊（含 salt），不存明碼 |
 | role | TEXT | `admin` / `teacher`（CHECK 限制） |
 | display_name | TEXT | 顯示名稱 |
-| email | TEXT | 管理員設定的帳號 Email；老師沒填 contact_email 時，忘記密碼寄到這裡 |
+| email | TEXT | 管理員設定的帳號 Email（提醒信用） |
 | is_active | INTEGER | 0 = 停用 |
 | must_change_password | INTEGER | 1 = 下次登入必須改密碼 |
 | failed_login_count / locked_until | | 登入失敗鎖定 |
@@ -191,7 +189,7 @@ erDiagram
 | ip / user_agent | 稽核用 |
 
 ### password_resets
-`user_id, token_hash, expires_at, used_at, created_at` — 只存雜湊，一次性。
+`user_id, token_hash, expires_at, used_at, created_at` — 已停用（忘記密碼改由管理員重設），資料表保留不刪。
 
 ### teacher_profiles
 | 欄位 | 對應調查表 | 公開？ |
@@ -269,8 +267,7 @@ erDiagram
 |---|---|---|
 | GET/POST | `/login` | 帳密登入；IP 限流 20 次/10 分；帳號失敗 5 次鎖 15 分 |
 | POST | `/logout` | 刪除伺服器端 Session |
-| GET/POST | `/forgot-password` | 寄送重設連結（IP 限流 5 次/10 分） |
-| GET/POST | `/reset-password/<token>` | 一次性、30 分鐘 |
+| GET | `/forgot-password` | 提示老師聯絡管理員重設密碼 |
 | GET/POST | `/account/password` | 需登入；改完登出其他裝置 |
 
 ### 教師編輯器（`me` = `/dashboard`，`assist` = `/admin/teachers/<uid>/edit`）
@@ -397,7 +394,7 @@ teacher-showcase/
 │   ├── seed.py              示範資料
 │   ├── templates/
 │   │   ├── base.html  macros.html
-│   │   ├── auth/      login, forgot_password, reset_password, change_password
+│   │   ├── auth/      login, forgot_password, change_password
 │   │   ├── public/    home, teacher
 │   │   ├── editor/    layout, overview, profile, items, item_edit, photos, courses, course_form
 │   │   ├── admin/     dashboard, teacher_form, credentials, import, import_preview,

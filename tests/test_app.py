@@ -23,7 +23,7 @@ os.environ.setdefault("SECRET_KEY", "test-secret")
 TEST_DATABASE_URL = os.environ.get("TEST_DATABASE_URL", "postgresql://localhost/teacher_showcase_test")
 
 from app import create_app                     # noqa: E402
-from app.security import forgot_limiter, login_limiter  # noqa: E402
+from app.security import login_limiter  # noqa: E402
 
 
 def png_bytes(size=(40, 30), color=(200, 30, 30)):
@@ -58,7 +58,6 @@ class Base(unittest.TestCase):
         self.app = create_app({"TESTING": True, "INSTANCE_DIR": Path(self.tmp), "DATABASE_URL": self.dsn,
                                "UPLOAD_FOLDER": Path(self.tmp) / "uploads"})
         login_limiter.reset()
-        forgot_limiter.reset()
         with self.app.app_context():
             from app.seed import seed
             seed(self.app)
@@ -175,64 +174,14 @@ class AuthTests(Base):
         stored = self.db("SELECT token_hash FROM sessions")[0][0]
         self.assertNotEqual(cookie, stored)
 
-    def test_forgot_and_reset_password(self):
-        token = self.csrf(path="/forgot-password")
-        with self.assertLogs(self.app.logger, "WARNING") as logs:
-            self.client.post("/forgot-password", data={"identifier": "t001", "csrf_token": token})
-        link = re.search(r"(/reset-password/\S+)", "\n".join(logs.output)).group(1)
-        r = self.post(link, {"new_password": "Reset2026x", "confirm_password": "Reset2026x"}, csrf_from=link)
-        self.assertEqual(r.status_code, 302)
-        self.assertEqual(self.login("t001", "Reset2026x").status_code, 302)
-        # 連結只能用一次
-        r = self.client.get(link)
-        self.assertEqual(r.status_code, 302)
-
-    def _forgot(self, identifier):
-        """送出忘記密碼，回傳寄信 log（未設 SMTP 時信件內容寫入 log）。"""
-        c = self.app.test_client()
-        token = self.csrf(client=c, path="/forgot-password")
-        with self.assertLogs(self.app.logger, "WARNING") as logs:
-            self.app.logger.warning("start")
-            c.post("/forgot-password", data={"identifier": identifier, "csrf_token": token})
-        return "\n".join(logs.output)
-
-    def test_forgot_password_sends_to_teacher_own_email(self):
-        """重設信寄到老師自己填的 Email（不需要先存檔或發布），可用帳號或該 Email 申請；改了 Email 就寄到新的。"""
-        self.assertIsNone(self.db("SELECT email FROM users WHERE username='t003'")[0][0])
-        self.db("UPDATE teacher_profiles SET contact_email = 'own@example.com' WHERE teacher_code = '003'")
-        self.assertIn("To: own@example.com", self._forgot("t003"))
-        self.assertIn("To: own@example.com", self._forgot("own@example.com"))
-        self.db("UPDATE teacher_profiles SET contact_email = 'changed@example.com' WHERE teacher_code = '003'")
-        out = self._forgot("t003")
-        self.assertIn("To: changed@example.com", out)
-        self.assertNotIn("own@example.com", out)
-
-    def test_forgot_password_prefers_teacher_email_over_admin_email(self):
-        self.db("UPDATE users SET email = 'admin.set@example.edu.tw' WHERE username='t001'")
-        self.db("UPDATE teacher_profiles SET contact_email = 'teacher.set@example.com' WHERE teacher_code = '001'")
-        out = self._forgot("t001")
-        self.assertIn("To: teacher.set@example.com", out)
-        self.assertNotIn("admin.set@example.edu.tw", out)
-        # 老師沒填時，才寄到管理員設定的帳號 Email
-        self.db("UPDATE teacher_profiles SET contact_email = '' WHERE teacher_code = '001'")
-        self.assertIn("To: admin.set@example.edu.tw", self._forgot("t001"))
-
-    def test_forgot_password_without_any_email_sends_nothing(self):
-        """沒有任何 Email 的老師不會寄信，也不建立重設連結（由管理員在後台重設）。"""
-        self.db("UPDATE teacher_profiles SET contact_email = '' WHERE teacher_code = '004'")
-        self.db("UPDATE users SET email = NULL WHERE username='t004'")
-        self.assertNotIn("重設密碼", self._forgot("t004"))
-        self.assertEqual(self.db("SELECT count(*) FROM password_resets r JOIN users u ON u.id = r.user_id"
-                                 " WHERE u.username = 't004'")[0][0], 0)
-
-    def test_forgot_password_without_smtp_asks_admin(self):
-        """沒有設定 SMTP 時，忘記密碼頁請老師找管理員，不建立重設連結。"""
-        self.app.config["MAIL_TO_LOG"] = False
+    def test_forgot_password_asks_admin(self):
+        """忘記密碼一律請老師聯絡管理員：不提供輸入框、不寄信、不產生重設連結。"""
         html = self.client.get("/forgot-password").get_data(as_text=True)
         self.assertIn("請聯絡系統管理員", html)
         self.assertNotIn('name="identifier"', html)
         self.client.post("/forgot-password", data={"identifier": "t001", "csrf_token": self.csrf()})
         self.assertEqual(self.db("SELECT count(*) FROM password_resets")[0][0], 0)
+        self.assertEqual(self.client.get("/reset-password/anything").status_code, 404)
 
     def test_open_redirect_blocked(self):
         token = self.csrf()
