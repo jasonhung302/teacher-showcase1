@@ -106,8 +106,17 @@ def change_password():
     return render_template("auth/change_password.html", forced=forced)
 
 
+def reset_mail_enabled():
+    """有設定 SMTP 才開放以 Email 重設密碼；開發／測試環境可改把連結寫入 log（MAIL_TO_LOG）。"""
+    cfg = current_app.config
+    return bool(cfg["SMTP_HOST"]) or bool(cfg.get("MAIL_TO_LOG", current_app.debug or current_app.testing))
+
+
 @bp.route("/forgot-password", methods=["GET", "POST"])
 def forgot_password():
+    if not reset_mail_enabled():
+        # 沒有寄信設定時不假裝『已寄出』，直接請老師找管理員重設
+        return render_template("auth/forgot_password.html", mail_enabled=False)
     if request.method == "POST":
         if not forgot_limiter.hit(client_ip()):
             abort(429, description="請求次數過多，請稍後再試。")
@@ -133,7 +142,7 @@ def forgot_password():
         flash("若該帳號存在且設有 Email，重設連結已寄出，請於 30 分鐘內完成設定。"
               "沒有設定 Email 的老師，請洽系統管理員協助重設。", "info")
         return redirect(url_for("auth.login"))
-    return render_template("auth/forgot_password.html")
+    return render_template("auth/forgot_password.html", mail_enabled=True)
 
 
 @bp.route("/reset-password/<token>", methods=["GET", "POST"])
