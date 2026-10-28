@@ -27,7 +27,7 @@
         <span class="hint" id="code-hint">公開頁網址為 /teacher/{{ form.teacher_code or '001' }}</span>
       </div>
       <div class="field">
-        <label for="email">帳號 Email（忘記密碼、提醒信用）</label>
+        <label for="email">帳號 Email（提醒信用）</label>
         <input id="email" name="email" type="email" value="{{ form.email or '' }}" maxlength="120">
       </div>
       {% if not teacher %}

@@ -86,9 +86,8 @@ class Config:
     # ---- 登入保護 ----
     LOGIN_MAX_FAILURES = 5
     LOGIN_LOCK_MINUTES = 15
-    RESET_TOKEN_MINUTES = 30
 
-    # ---- 郵件（未設定 SMTP_HOST 時，重設連結會寫進伺服器 log） ----
+    # ---- 郵件：管理後台『寄送提醒信』使用（未設定 SMTP_HOST 時內容寫進伺服器 log） ----
     SMTP_HOST = os.environ.get("SMTP_HOST", "")
     SMTP_PORT = _int("SMTP_PORT", 587)
     SMTP_USER = os.environ.get("SMTP_USER", "")
