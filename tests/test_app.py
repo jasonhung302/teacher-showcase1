@@ -236,6 +236,15 @@ class AuthTests(Base):
         self.assertIsNone(self.db("SELECT email FROM users WHERE username='t003'")[0][0])
         self.assertIn("已被其他帳號使用", self.client.get(r.headers["Location"]).get_data(as_text=True))
 
+    def test_forgot_password_without_smtp_asks_admin(self):
+        """沒有設定 SMTP 時，忘記密碼頁請老師找管理員，不建立重設連結。"""
+        self.app.config["MAIL_TO_LOG"] = False
+        html = self.client.get("/forgot-password").get_data(as_text=True)
+        self.assertIn("請聯絡系統管理員", html)
+        self.assertNotIn('name="identifier"', html)
+        self.client.post("/forgot-password", data={"identifier": "t001", "csrf_token": self.csrf()})
+        self.assertEqual(self.db("SELECT count(*) FROM password_resets")[0][0], 0)
+
     def test_open_redirect_blocked(self):
         token = self.csrf()
         r = self.client.post("/login?next=//evil.example.com", data={"username": "t001", "password": "Demo1234",

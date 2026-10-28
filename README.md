@@ -89,7 +89,7 @@ python -m unittest discover -s tests -t . -v
 | `flask --app wsgi restore-backup <zip>` | 從備份還原（請先停止網站；目前資料會先自動另存） |
 | `flask --app wsgi fill-account-emails` | 帳號 Email 空白的老師，以其自填的聯繫 Email 補上（可重複執行） |
 
-忘記密碼：未設定 SMTP 時，重設連結會印在伺服器終端機的 log 中，方便測試。
+忘記密碼：未設定 SMTP 時，正式環境的忘記密碼頁會請老師聯絡管理員重設（不會假裝已寄出）；開發或測試模式下，重設連結會印在伺服器終端機的 log 中，方便測試。
 
 ---
 

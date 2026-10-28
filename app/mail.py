@@ -10,12 +10,12 @@ def send_mail(to, subject, body):
     if not cfg["SMTP_HOST"]:
         current_app.logger.warning("[MAIL 未設定 SMTP，以下內容僅寫入 log]\nTo: %s\nSubject: %s\n%s", to, subject, body)
         return False
-    msg = EmailMessage()
-    msg["From"] = cfg["SMTP_FROM"]
-    msg["To"] = to
-    msg["Subject"] = subject
-    msg.set_content(body)
     try:
+        msg = EmailMessage()
+        msg["From"] = cfg["SMTP_FROM"]
+        msg["To"] = to
+        msg["Subject"] = subject
+        msg.set_content(body)
         with smtplib.SMTP(cfg["SMTP_HOST"], cfg["SMTP_PORT"], timeout=15) as smtp:
             if cfg["SMTP_USE_TLS"]:
                 smtp.starttls()
@@ -23,6 +23,6 @@ def send_mail(to, subject, body):
                 smtp.login(cfg["SMTP_USER"], cfg["SMTP_PASSWORD"])
             smtp.send_message(msg)
         return True
-    except (smtplib.SMTPException, OSError):
-        current_app.logger.exception("寄信失敗：%s", to)
+    except Exception:  # noqa: BLE001 — 寄信設定有誤（例如帳密含中文、全形字）也不能讓頁面變成 500
+        current_app.logger.exception("寄信失敗：%s（請檢查 SMTP_* 環境變數）", to)
         return False
