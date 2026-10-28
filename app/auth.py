@@ -121,9 +121,15 @@ def forgot_password():
         if not forgot_limiter.hit(client_ip()):
             abort(429, description="請求次數過多，請稍後再試。")
         ident = request.form.get("identifier", "").strip()[:120]
-        user = query("SELECT * FROM users WHERE is_active = 1 AND (lower(username) = lower(%s) OR lower(email) = lower(%s))",
-                     (ident, ident), one=True) if ident else None
-        if user and user["email"]:
+        # 可輸入帳號或 Email；重設信寄到『老師自己在基本資料填的 Email』，沒填才用管理員設定的帳號 Email
+        users = query("SELECT u.*, p.contact_email FROM users u LEFT JOIN teacher_profiles p ON p.user_id = u.id"
+                      " WHERE u.is_active = 1 AND (lower(u.username) = lower(%s) OR lower(u.email) = lower(%s)"
+                      " OR lower(p.contact_email) = lower(%s)) ORDER BY u.id LIMIT 5",
+                      (ident, ident, ident)) if ident else []
+        for user in users:
+            to = (user["contact_email"] or "").strip() or user["email"]
+            if not to:
+                continue
             token = secrets.token_urlsafe(32)
             execute("UPDATE password_resets SET used_at = %s WHERE user_id = %s AND used_at IS NULL",
                     (ts(), user["id"]))
@@ -133,7 +139,7 @@ def forgot_password():
             base = current_app.config["BASE_URL"].rstrip("/") or request.host_url.rstrip("/")
             link = base + url_for("auth.reset_password", token=token)
             send_mail(
-                user["email"], f"[{current_app.config['SITE_NAME']}] 重設密碼",
+                to, f"[{current_app.config['SITE_NAME']}] 重設密碼",
                 f"{user['display_name']} 您好：\n\n請於 {current_app.config['RESET_TOKEN_MINUTES']} 分鐘內"
                 f"點擊下列連結重設密碼：\n{link}\n\n若非您本人申請，請忽略此信，您的密碼不會被變更。",
             )
