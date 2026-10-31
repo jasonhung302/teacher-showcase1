@@ -9,6 +9,7 @@ from flask import (Blueprint, Response, abort, current_app, g, make_response, re
 from .db import local_today, parse_ts, query
 from .profiles import COUNTIES
 from .qr import to_svg
+from .schedule import REGIONS, day_info
 from .services import (PUBLIC_VISIBLE_SQL, VIEW_COOKIE, public_url, record_view, seen_cookie_value, seen_today,
                        should_count_view, site_root, view_stats)
 from .storage import get_storage
@@ -20,7 +21,8 @@ CODE_RE = re.compile(r"^[A-Za-z0-9_-]{1,20}$")
 
 def published_rows():
     return query(
-        "SELECT p.id, p.published_snapshot, p.published_at FROM teacher_profiles p JOIN users u ON u.id = p.user_id"
+        "SELECT p.id, p.published_snapshot, p.published_at, u.username FROM teacher_profiles p"
+        " JOIN users u ON u.id = p.user_id"
         f" WHERE p.status = 'published' AND p.published_snapshot IS NOT NULL AND {PUBLIC_VISIBLE_SQL}"
         " ORDER BY p.teacher_code", (local_today(),))
 
@@ -31,7 +33,7 @@ def home():
     teachers = []
     for r in rows:
         t = json.loads(r["published_snapshot"])
-        t["_pid"], t["_published_at"] = r["id"], r["published_at"]
+        t["_pid"], t["_published_at"], t["_username"] = r["id"], r["published_at"], r["username"]
         teachers.append(t)
     q = (request.args.get("q") or "").strip()[:50]
     county = request.args.get("county", "")
@@ -60,9 +62,20 @@ def home():
     filtering = bool(q or county or subject or school)
     results = [t for t in teachers if match(t)]
 
-    # 熱門（近 30 天瀏覽）與最新發布，只在沒有篩選時顯示
+    # 活動期間：只列出『當天』上場且已發布的老師（依議程順序、依區域上色）；
+    # 搜尋時或點了「查看全部教師」（?all=1）照常列出全部。?day=YYYY-MM-DD 可預覽某一天。
+    preview = request.args.get("day", "")
+    event_day = day_info(preview) or day_info(local_today())
+    day_view = bool(event_day) and not filtering and request.args.get("all") != "1"
+    regions = []
+    if day_view:
+        by_user = {t["_username"].lower(): t for t in teachers}
+        results = [dict(by_user[u], _region=reg) for u, reg in event_day["entries"] if u in by_user]
+        regions = [(k, v) for k, v in REGIONS.items() if any(t["_region"] == k for t in results)]
+
+    # 熱門（近 30 天瀏覽）與最新發布，只在沒有篩選、也不在活動期間時顯示
     popular, latest, hot_courses = [], [], []
-    if not filtering and len(teachers) >= 3:
+    if not filtering and not event_day and len(teachers) >= 3:
         stats = view_stats()
         ranked = sorted(teachers, key=lambda t: stats.get(t["_pid"], {}).get("d30", 0), reverse=True)
         popular = [t for t in ranked if stats.get(t["_pid"], {}).get("d30", 0) > 0][:4]
@@ -73,6 +86,8 @@ def home():
     return render_template("public/home.html", teachers=results, total=len(teachers),
                            counties=used_counties, subjects=all_subjects, filtering=filtering,
                            popular=popular, latest=latest, hot_courses=hot_courses[:4],
+                           event_day=event_day, day_view=day_view, regions=regions,
+                           preview_day=event_day["date"] if event_day and preview == event_day["date"] else None,
                            filters={"q": q, "county": county, "subject": subject, "school": school})
 
 

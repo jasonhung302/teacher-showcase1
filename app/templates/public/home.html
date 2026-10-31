@@ -2,10 +2,10 @@
 {% import "macros.html" as m with context %}
 {% block body_class %}page-home{% endblock %}
 
-{# i：卡片序號，用來輪流套用底色；角色為該老師固定的代表角色 #}
+{# i：卡片序號，用來輪流套用底色；活動當天改依區域上色（t._region）。角色為該老師固定的代表角色 #}
 {% macro teacher_card(t, i) %}
   {% set mascot = mascot_layout(t.teacher_code).buddy %}
-  <a class="teacher-card card tone-{{ i % 4 }}{{ ' has-mascot' if mascot }}" href="{{ url_for('public.teacher', code=t.teacher_code) }}">
+  <a class="teacher-card card {{ ('region-' ~ t._region) if t._region else ('tone-' ~ (i % 4)) }}{{ ' has-mascot' if mascot }}" href="{{ url_for('public.teacher', code=t.teacher_code) }}">
     <div class="teacher-card-photo">
       {% if t.avatar %}
         <img src="{{ file_url(t.avatar, t.avatar_thumb) }}" alt="" loading="lazy" decoding="async" data-avatar-img>
@@ -100,17 +100,34 @@
 {% endif %}
 
 <section class="container section" id="list">
-  <div class="section-head">
-    <h2>{{ '搜尋結果' if filtering else '教師列表' }}</h2>
-    <span class="muted">{{ teachers|length }} 位</span>
-  </div>
+  {% if day_view %}
+    <div class="section-head day-head">
+      <h2>今日活動教師</h2>
+      <span class="day-badge">{{ event_day.label }}・第 {{ event_day.number }} 天／共 {{ event_day.total }} 天</span>
+      <a class="day-link" href="{{ url_for('public.home', all=1, day=preview_day) }}#list">查看全部教師 →</a>
+    </div>
+    {% if preview_day %}<p class="callout callout-info small">預覽模式：顯示 {{ event_day.label }} 的活動教師。</p>{% endif %}
+    {% if regions %}
+      <ul class="region-legend" aria-label="區域顏色">
+        {% for key, name in regions %}<li><span class="region-swatch region-{{ key }}" aria-hidden="true"></span>{{ name }}</li>{% endfor %}
+      </ul>
+    {% endif %}
+  {% else %}
+    <div class="section-head">
+      <h2>{{ '搜尋結果' if filtering else '教師列表' }}</h2>
+      <span class="muted">{{ teachers|length }} 位</span>
+      {% if event_day and not filtering %}
+        <a class="day-link" href="{{ url_for('public.home', day=preview_day) }}#list">← 回到今日活動教師</a>
+      {% endif %}
+    </div>
+  {% endif %}
   {% if teachers %}
     <div class="teacher-grid">
       {% for t in teachers %}{{ teacher_card(t, loop.index0) }}{% endfor %}
     </div>
   {% else %}
     <div class="card empty">
-      <p>目前沒有符合條件的老師。</p>
+      <p>{{ '今天的老師資料準備中，發布後就會出現在這裡。' if day_view else '目前沒有符合條件的老師。' }}</p>
     </div>
   {% endif %}
 </section>

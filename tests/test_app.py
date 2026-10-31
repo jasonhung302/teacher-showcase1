@@ -14,6 +14,7 @@ import tempfile
 import unittest
 import uuid
 from pathlib import Path
+from unittest import mock
 
 import psycopg
 from PIL import Image
@@ -415,6 +416,36 @@ class PublishTests(Base):
         self.login("t001")
         self.post("/dashboard/items/specialties", {"name": "x'); DROP TABLE users; --"})
         self.assertTrue(self.db("SELECT COUNT(*) FROM users")[0][0] > 0)
+
+    def test_event_day_lists_that_days_published_teachers(self):
+        """活動當天首頁只列出當天上場且已發布的老師，依議程順序、依區域上色；換日就換名單。"""
+        with mock.patch("app.public.local_today", return_value="2026-11-12"):
+            html = self.client.get("/").get_data(as_text=True)
+        self.assertIn("今日活動教師", html)
+        self.assertIn("11/12（四）", html)
+        self.assertLess(html.index("林怡君"), html.index("陳建宏"))          # t001 → t002 依議程順序
+        self.assertNotIn("張雅婷", html)                                     # t003 未發布 → 不上列表
+        self.assertIn("region-central", html)                               # 雲林縣＝中區
+        self.assertIn("region-south", html)                                 # 臺南市＝南區
+        with mock.patch("app.public.local_today", return_value="2026-11-13"):
+            html = self.client.get("/").get_data(as_text=True)
+        self.assertIn("今天的老師資料準備中", html)                          # 第二天的老師都還沒發布
+        self.assertNotIn("林怡君", html.split('id="list"')[1])
+        with mock.patch("app.public.local_today", return_value="2026-11-13"):
+            html = self.client.get("/?all=1").get_data(as_text=True)         # 查看全部教師
+        self.assertIn("林怡君", html.split('id="list"')[1])
+        self.assertIn("回到今日活動教師", html)
+
+    def test_outside_event_lists_everyone(self):
+        with mock.patch("app.public.local_today", return_value="2026-11-16"):
+            html = self.client.get("/").get_data(as_text=True)
+        self.assertNotIn("今日活動教師", html)
+        self.assertIn("林怡君", html)
+        self.assertIn("陳建宏", html)
+        # 活動前可用 ?day= 預覽某一天
+        html = self.client.get("/?day=2026-11-12").get_data(as_text=True)
+        self.assertIn("今日活動教師", html)
+        self.assertIn("預覽模式", html)
 
     def test_search_filters(self):
         html = self.client.get("/?county=臺中市").get_data(as_text=True)
