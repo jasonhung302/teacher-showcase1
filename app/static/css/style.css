@@ -455,10 +455,13 @@ body.page-home { background: linear-gradient(180deg, #e8f0f8 0, #eef3f8 560px, v
 .t-actions .btn-accent { background: var(--accent-warm); padding-inline: 2.4rem; }
 .t-actions .btn-accent:hover { background: #dda03a; }
 .t-hero-foot { position: relative; }
-.t-mascots { position: absolute; right: 24px; bottom: calc(100% - 14px); display: flex; align-items: flex-end; gap: .25rem; z-index: 2; pointer-events: none; }
+.t-mascots { position: absolute; right: max(-24px, calc((100% - 100vw) / 2 + 8px)); bottom: calc(100% - 14px); display: flex; align-items: flex-end; gap: .25rem; z-index: 2; pointer-events: none; }
 .t-mascots:last-child { bottom: 0; }
+/* 頁首角色是背景裝飾：調淡、降低飽和度，不搶文字的焦點 */
+.t-mascots img, .t-mascot-solo { opacity: .5; filter: saturate(.7); }
 .t-mascots img { height: 150px; width: auto; }
-.t-mascot-solo { position: absolute; right: 40px; bottom: 0; height: 430px; width: auto; z-index: 0; pointer-events: none; }
+/* 寬的角色（毛球、小雞）以 max-width 限制，避免壓到 Slogan 與按鈕 */
+.t-mascot-solo { position: absolute; right: max(-70px, calc((100% - 100vw) / 2 + 8px)); bottom: 0; width: auto; height: auto; max-height: 430px; max-width: 320px; z-index: 0; pointer-events: none; }
 .t-hero-inner { z-index: 1; }
 .t-stats { margin: 2.5rem 0 0; display: grid; grid-template-columns: repeat(4, 1fr); background: rgba(110, 118, 132, .24); border-radius: 16px 16px 0 0; position: relative; z-index: 1; }
 .t-stats div { padding: 1rem; text-align: center; }
@@ -705,7 +708,7 @@ kbd { font-family: inherit; font-size: .8em; border: 1px solid var(--line); bord
   .t-mascots { position: static; justify-content: flex-end; margin: 1.5rem 0 -12px; }
   .t-mascots + .t-stats { margin-top: 0; }
   .t-mascots img { height: 110px; }
-  .t-mascot-solo { position: static; display: block; height: 170px; margin: 1.5rem 0 -12px auto; }
+  .t-mascot-solo { position: static; display: block; height: 170px; max-width: none; margin: 1.5rem 0 -12px auto; }
   .t-mascot-solo + .t-stats { margin-top: 0; }
 }
 @media (max-width: 960px) {
