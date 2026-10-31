@@ -196,7 +196,7 @@ body.page-home { background: linear-gradient(180deg, #e8f0f8 0, #eef3f8 560px, v
 .teacher-card-school { margin: 0; color: var(--ink-2); font-size: .9rem; }
 .teacher-card-body .small { margin: 0; }
 .teacher-card-slogan { margin: .4rem 0 0; color: var(--muted); font-size: .875rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.has-mascot .teacher-card-slogan { padding-right: 64px; }
+.has-mascot .teacher-card-slogan { padding-right: 88px; }
 .teacher-card-foot { padding: .85rem 1.15rem; background: var(--tone-0); color: var(--ink-2); font-weight: 700; font-size: 1.05rem; }
 .tone-1 .teacher-card-foot { background: var(--tone-1); }
 .tone-2 .teacher-card-foot { background: var(--tone-2); }
@@ -458,6 +458,8 @@ body.page-home { background: linear-gradient(180deg, #e8f0f8 0, #eef3f8 560px, v
 .t-mascots { position: absolute; right: 24px; bottom: calc(100% - 14px); display: flex; align-items: flex-end; gap: .25rem; z-index: 2; pointer-events: none; }
 .t-mascots:last-child { bottom: 0; }
 .t-mascots img { height: 150px; width: auto; }
+.t-mascot-solo { position: absolute; right: 40px; bottom: 0; height: 430px; width: auto; z-index: 0; pointer-events: none; }
+.t-hero-inner { z-index: 1; }
 .t-stats { margin: 2.5rem 0 0; display: grid; grid-template-columns: repeat(4, 1fr); background: rgba(110, 118, 132, .24); border-radius: 16px 16px 0 0; position: relative; z-index: 1; }
 .t-stats div { padding: 1rem; text-align: center; }
 .t-stats div + div { border-left: 1px solid rgba(71, 102, 161, .5); }
@@ -703,6 +705,8 @@ kbd { font-family: inherit; font-size: .8em; border: 1px solid var(--line); bord
   .t-mascots { position: static; justify-content: flex-end; margin: 1.5rem 0 -12px; }
   .t-mascots + .t-stats { margin-top: 0; }
   .t-mascots img { height: 110px; }
+  .t-mascot-solo { position: static; display: block; height: 170px; margin: 1.5rem 0 -12px auto; }
+  .t-mascot-solo + .t-stats { margin-top: 0; }
 }
 @media (max-width: 960px) {
   .t-hero-inner { grid-template-columns: 200px 1fr; gap: 1.75rem; }
@@ -723,6 +727,7 @@ kbd { font-family: inherit; font-size: .8em; border: 1px solid var(--line); bord
   .t-stats dd { font-size: 1.4rem; }
   .t-mascots { justify-content: center; }
   .t-mascots img { height: 88px; }
+  .t-mascot-solo { height: 120px; margin-inline: auto; }
   .t-section { padding: 2.25rem 0; }
   .hide-sm { display: none; }
   .t-share-inner { flex-direction: column; text-align: center; }
@@ -758,7 +763,7 @@ kbd { font-family: inherit; font-size: .8em; border: 1px solid var(--line); bord
   body { background: #fff; font-size: 11pt; }
   .card, .course-card, .spec-card, .honor { box-shadow: none; break-inside: avoid; }
   .t-hero { background: #fff !important; color: var(--ink); padding-top: 0; border-bottom: 3px solid var(--primary); }
-  .t-hero::before, .t-mascots, .teacher-card-mascot { display: none !important; }
+  .t-hero::before, .t-mascots, .t-mascot-solo, .teacher-card-mascot { display: none !important; }
   .t-hero *, .t-intro h1, .t-slogan, .t-title, .t-school { color: var(--ink) !important; }
   .t-tags li, .t-school span { border: 1px solid var(--line); background: #fff; }
   .t-stats { background: #fff; border: 1px solid var(--line); }

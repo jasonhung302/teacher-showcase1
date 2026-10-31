@@ -64,10 +64,13 @@
   {# 只顯示有內容的統計；全部為 0 時整列隱藏 #}
   {% set stats = [('數位課程', t.courses|length), ('課堂照片', t.photos|length),
                   ('獲獎', t.awards|length), ('認證', t.certifications|length)]|selectattr(1)|list %}
+  {% set ml = mascot_layout(t.teacher_code) %}
   <div class="container t-hero-foot">
-    {% if mascots %}
+    {% if ml.solo %}
+      <img class="t-mascot-solo" src="{{ url_for('static', filename='img/mascots/' ~ ml.solo) }}" alt="" aria-hidden="true">
+    {% elif ml.group %}
       <div class="t-mascots" aria-hidden="true">
-        {% for f in mascots[:3] %}<img src="{{ url_for('static', filename='img/mascots/' ~ f) }}" alt="">{% endfor %}
+        {% for f in ml.group %}<img src="{{ url_for('static', filename='img/mascots/' ~ f) }}" alt="">{% endfor %}
       </div>
     {% endif %}
     {% if stats %}
