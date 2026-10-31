@@ -51,12 +51,12 @@
         </ul>
       {% endif %}
       <div class="t-actions">
-        {% if t.courses %}<a class="btn btn-accent" href="#courses">看數位課程成果</a>{% endif %}
+        {% if t.courses %}<a class="btn btn-accent" href="#courses">看數位課程成果 <span aria-hidden="true">→</span></a>{% endif %}
         {% if not preview %}
-          <button type="button" class="btn btn-outline-light" data-share
+          <button type="button" class="btn btn-outline-steel" data-share
                   data-title="{{ t.teacher_name }}｜{{ t.school_name }}" data-text="{{ t.slogan or desc }}"
                   data-url="{{ page_url }}" aria-haspopup="dialog">分享</button>
-          <button type="button" class="btn btn-outline-light hide-sm" data-print>列印／存 PDF</button>
+          <button type="button" class="btn btn-steel hide-sm" data-print>列印／存 PDF</button>
         {% endif %}
       </div>
     </div>
@@ -64,13 +64,18 @@
   {# 只顯示有內容的統計；全部為 0 時整列隱藏 #}
   {% set stats = [('數位課程', t.courses|length), ('課堂照片', t.photos|length),
                   ('獲獎', t.awards|length), ('認證', t.certifications|length)]|selectattr(1)|list %}
-  {% if stats %}
-  <div class="container">
+  <div class="container t-hero-foot">
+    {% if mascots %}
+      <div class="t-mascots" aria-hidden="true">
+        {% for f in mascots[:3] %}<img src="{{ url_for('static', filename='img/mascots/' ~ f) }}" alt="">{% endfor %}
+      </div>
+    {% endif %}
+    {% if stats %}
     <dl class="t-stats t-stats-{{ stats|length }}">
       {% for label, n in stats %}<div><dt>{{ label }}</dt><dd>{{ n }}</dd></div>{% endfor %}
     </dl>
+    {% endif %}
   </div>
-  {% endif %}
 </section>
 
 {% if t.philosophy or t.specialties or t.experiences or t.courses or t.photos or t.awards or t.certifications %}

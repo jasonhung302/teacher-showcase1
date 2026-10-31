@@ -1,5 +1,6 @@
 """Flask 應用程式工廠。"""
 import logging
+from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from flask import Flask, g, render_template, request, flash, redirect
@@ -88,6 +89,11 @@ def create_app(overrides=None):
         n = n or 0
         return f"{n / 1024 / 1024:.1f} MB" if n >= 1024 * 1024 else f"{max(1, n // 1024)} KB"
 
+    # 公開頁的角色插圖：放在 static/img/mascots/ 的圖檔（依檔名排序），沒有就不顯示
+    mascot_dir = Path(app.static_folder) / "img" / "mascots"
+    mascots = sorted(p.name for p in mascot_dir.iterdir()
+                     if p.suffix.lower() in {".png", ".webp", ".svg"}) if mascot_dir.is_dir() else []
+
     @app.context_processor
     def _inject():
         from flask import url_for
@@ -107,6 +113,7 @@ def create_app(overrides=None):
             "site_tagline": app.config["SITE_TAGLINE"],
             "current_user": g.get("user"),
             "eurl": eurl,
+            "mascots": mascots,
         }
 
     # ---------------- 藍圖

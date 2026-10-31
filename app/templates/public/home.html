@@ -2,8 +2,10 @@
 {% import "macros.html" as m with context %}
 {% block body_class %}page-home{% endblock %}
 
-{% macro teacher_card(t) %}
-  <a class="teacher-card card" href="{{ url_for('public.teacher', code=t.teacher_code) }}">
+{# i：卡片序號，用來輪流套用底色與角色插圖 #}
+{% macro teacher_card(t, i) %}
+  {% set mascot = mascots[i % mascots|length] if mascots else none %}
+  <a class="teacher-card card tone-{{ i % 4 }}{{ ' has-mascot' if mascot }}" href="{{ url_for('public.teacher', code=t.teacher_code) }}">
     <div class="teacher-card-photo">
       {% if t.avatar %}
         <img src="{{ file_url(t.avatar, t.avatar_thumb) }}" alt="" loading="lazy" decoding="async" data-avatar-img>
@@ -21,6 +23,8 @@
       </div>
       {% if t.slogan %}<p class="teacher-card-slogan">「{{ t.slogan }}」</p>{% endif %}
     </div>
+    <div class="teacher-card-foot">點擊查看 <span aria-hidden="true">→</span></div>
+    {% if mascot %}<img class="teacher-card-mascot" src="{{ url_for('static', filename='img/mascots/' ~ mascot) }}" alt="" loading="lazy">{% endif %}
   </a>
 {% endmacro %}
 
@@ -102,7 +106,7 @@
   </div>
   {% if teachers %}
     <div class="teacher-grid">
-      {% for t in teachers %}{{ teacher_card(t) }}{% endfor %}
+      {% for t in teachers %}{{ teacher_card(t, loop.index0) }}{% endfor %}
     </div>
   {% else %}
     <div class="card empty">

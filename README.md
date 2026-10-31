@@ -88,6 +88,8 @@ python -m unittest discover -s tests -t . -v
 | `flask --app wsgi backup` | 建立備份（存在 `instance/backups/`，保留最近 14 份） |
 | `flask --app wsgi restore-backup <zip>` | 從備份還原（請先停止網站；目前資料會先自動另存） |
 
+角色插圖：把透明背景的 PNG（或 WebP、SVG）放進 `app/static/img/mascots/`，依檔名排序（例如 `mascot-1.png`、`mascot-2.png`、`mascot-3.png`），教師公開頁的頁首會顯示前三個，教師列表的卡片會輪流使用；資料夾是空的就不顯示。放入後需重新部署。
+
 忘記密碼：登入頁的「忘記密碼？」會請老師聯絡系統管理員；管理員在後台該老師頁面按「重設密碼」產生臨時密碼（只顯示一次），老師登入後會被要求設定新密碼。
 
 ---

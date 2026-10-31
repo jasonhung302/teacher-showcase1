@@ -395,6 +395,7 @@ class PublishTests(Base):
     def test_unpublished_teacher_not_listed(self):
         html = self.client.get("/").get_data(as_text=True)
         self.assertIn("林怡君", html)
+        self.assertIn("點擊查看", html)                                    # 卡片底部連結條
         self.assertNotIn("張雅婷", html)
         self.assertEqual(self.client.get("/teacher/003").status_code, 404)
 
