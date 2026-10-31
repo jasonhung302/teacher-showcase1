@@ -1,4 +1,5 @@
 """Flask 應用程式工廠。"""
+import hashlib
 import logging
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -94,6 +95,18 @@ def create_app(overrides=None):
     mascots = sorted(p.name for p in mascot_dir.iterdir()
                      if p.suffix.lower() in {".png", ".webp", ".svg"}) if mascot_dir.is_dir() else []
 
+    def mascot_layout(key):
+        """依老師代碼隨機（但固定）分配角色：buddy＝代表角色（卡片與頁首共用）；
+        頁首隨機用 solo（代表角色單獨放大）或 group（三個角色站一排，代表角色在中間）。"""
+        if not mascots:
+            return {}
+        n = int(hashlib.md5(str(key).encode("utf-8")).hexdigest()[:8], 16)   # 只用來打散，不涉及安全
+        buddy = mascots[n % len(mascots)]
+        others = [m for m in mascots if m != buddy][:2]
+        if len(others) == 2 and (n // len(mascots)) % 2:
+            return {"buddy": buddy, "group": [others[0], buddy, others[1]]}
+        return {"buddy": buddy, "solo": buddy}
+
     @app.context_processor
     def _inject():
         from flask import url_for
@@ -113,7 +126,7 @@ def create_app(overrides=None):
             "site_tagline": app.config["SITE_TAGLINE"],
             "current_user": g.get("user"),
             "eurl": eurl,
-            "mascots": mascots,
+            "mascot_layout": mascot_layout,
         }
 
     # ---------------- 藍圖

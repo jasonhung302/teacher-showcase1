@@ -2,9 +2,9 @@
 {% import "macros.html" as m with context %}
 {% block body_class %}page-home{% endblock %}
 
-{# i：卡片序號，用來輪流套用底色與角色插圖 #}
+{# i：卡片序號，用來輪流套用底色；角色為該老師固定的代表角色 #}
 {% macro teacher_card(t, i) %}
-  {% set mascot = mascots[i % mascots|length] if mascots else none %}
+  {% set mascot = mascot_layout(t.teacher_code).buddy %}
   <a class="teacher-card card tone-{{ i % 4 }}{{ ' has-mascot' if mascot }}" href="{{ url_for('public.teacher', code=t.teacher_code) }}">
     <div class="teacher-card-photo">
       {% if t.avatar %}
