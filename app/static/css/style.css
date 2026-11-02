@@ -183,7 +183,10 @@ body.page-home { background: linear-gradient(180deg, #e8f0f8 0, #eef3f8 560px, v
 .search-card .btn-primary:hover { background: var(--steel-dark); }
 .eyebrow { font-size: .85rem; font-weight: 600; color: var(--primary); letter-spacing: .08em; margin-bottom: .4rem; }
 .hero-lead { color: var(--ink-2); font-size: 1.05rem; max-width: 640px; }
-.search-card { margin-top: 1.5rem; padding: 1.25rem; }
+.search-card { margin-top: 1.5rem; padding: 1.25rem; position: relative; z-index: 1; }
+.home-intro { position: relative; }
+/* 大主角：站在標題右側，下緣藏在搜尋卡片後面 */
+.home-mascot { position: absolute; right: 24px; bottom: -44px; height: 190px; width: auto; pointer-events: none; }
 .search-grid { display: grid; grid-template-columns: 2fr 1fr 1fr 1.4fr auto; gap: .75rem; align-items: end; }
 .search-grid .field { margin: 0; }
 .search-actions { display: flex; gap: .5rem; }
@@ -418,6 +421,7 @@ body.page-home { background: linear-gradient(180deg, #e8f0f8 0, #eef3f8 560px, v
   .brand-text { font-size: .95rem; }
   .card { padding: 1.1rem; }
   .hero { padding-top: 2rem; }
+  .home-mascot { display: none; }
   .search-grid { grid-template-columns: 1fr; }
   .form-grid { grid-template-columns: 1fr; }
   .grid-2 { grid-template-columns: 1fr; }
@@ -480,6 +484,7 @@ body.page-home { background: linear-gradient(180deg, #e8f0f8 0, #eef3f8 560px, v
 /* 頁首角色是背景裝飾：調淡、降低飽和度，不搶文字的焦點 */
 .t-mascots img, .t-mascot-solo { opacity: .5; filter: saturate(.7); }
 .t-mascots img { height: 150px; width: auto; }
+.t-mascots img.is-star { height: 190px; }
 /* 寬的角色（毛球、小雞）以 max-width 限制，避免壓到 Slogan 與按鈕 */
 .t-mascot-solo { position: absolute; right: max(-70px, calc((100% - 100vw) / 2 + 8px)); bottom: 0; width: auto; height: auto; max-height: 430px; max-width: 320px; z-index: 0; pointer-events: none; }
 .t-hero-inner { z-index: 1; }
@@ -728,6 +733,7 @@ kbd { font-family: inherit; font-size: .8em; border: 1px solid var(--line); bord
   .t-mascots { position: static; justify-content: flex-end; margin: 1.5rem 0 -12px; }
   .t-mascots + .t-stats { margin-top: 0; }
   .t-mascots img { height: 110px; }
+  .t-mascots img.is-star { height: 140px; }
   .t-mascot-solo { position: static; display: block; height: 170px; max-width: none; margin: 1.5rem 0 -12px auto; }
   .t-mascot-solo + .t-stats { margin-top: 0; }
 }
@@ -750,6 +756,7 @@ kbd { font-family: inherit; font-size: .8em; border: 1px solid var(--line); bord
   .t-stats dd { font-size: 1.4rem; }
   .t-mascots { justify-content: center; }
   .t-mascots img { height: 88px; }
+  .t-mascots img.is-star { height: 110px; }
   .t-mascot-solo { height: 120px; margin-inline: auto; }
   .t-section { padding: 2.25rem 0; }
   .hide-sm { display: none; }
@@ -786,7 +793,7 @@ kbd { font-family: inherit; font-size: .8em; border: 1px solid var(--line); bord
   body { background: #fff; font-size: 11pt; }
   .card, .course-card, .spec-card, .honor { box-shadow: none; break-inside: avoid; }
   .t-hero { background: #fff !important; color: var(--ink); padding-top: 0; border-bottom: 3px solid var(--primary); }
-  .t-hero::before, .t-mascots, .t-mascot-solo, .teacher-card-mascot { display: none !important; }
+  .t-hero::before, .t-mascots, .t-mascot-solo, .teacher-card-mascot, .home-mascot { display: none !important; }
   .t-hero *, .t-intro h1, .t-slogan, .t-title, .t-school { color: var(--ink) !important; }
   .t-tags li, .t-school span { border: 1px solid var(--line); background: #fff; }
   .t-stats { background: #fff; border: 1px solid var(--line); }

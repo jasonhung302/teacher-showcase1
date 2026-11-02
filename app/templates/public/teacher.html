@@ -70,7 +70,7 @@
       <img class="t-mascot-solo" src="{{ url_for('static', filename='img/mascots/' ~ ml.solo) }}" alt="" aria-hidden="true">
     {% elif ml.group %}
       <div class="t-mascots" aria-hidden="true">
-        {% for f in ml.group %}<img src="{{ url_for('static', filename='img/mascots/' ~ f) }}" alt="">{% endfor %}
+        {% for f in ml.group %}<img src="{{ url_for('static', filename='img/mascots/' ~ f) }}" alt=""{% if f == ml.star %} class="is-star"{% endif %}>{% endfor %}
       </div>
     {% endif %}
     {% if stats %}
