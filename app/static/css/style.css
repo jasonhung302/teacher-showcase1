@@ -787,38 +787,48 @@ kbd { font-family: inherit; font-size: .8em; border: 1px solid var(--line); bord
 
 /* =====================================================================
    角色介紹（/characters）：吱可思大冒險
+   頁首「全員合照」站在頁首底邊（e度在中間），下方每位角色一段，左右交錯，
+   角色站在自己顏色的不規則色塊上；個性做成同色標籤。
    ===================================================================== */
-.char-peach { --char-bg: #fdeedd; }
-.char-mint { --char-bg: #e2f1ea; }
-.char-lilac { --char-bg: #efe8f5; }
-.char-lemon { --char-bg: #fdf6d6; }
-.char-sky { --char-bg: #e4edf9; }
-.char-rose { --char-bg: #fbe8ee; }
-.chars-hero { background: linear-gradient(110deg, var(--hero-1) 0%, var(--hero-2) 48%, var(--hero-3) 100%); padding-block: 3rem 2.25rem; }
-.chars-hero h1 { font-size: clamp(2rem, 1.5rem + 2vw, 2.8rem); letter-spacing: .14em; color: #6b5243; margin: 0; }
-.chars { display: grid; gap: 1.25rem; }
-.char-lead { display: grid; grid-template-columns: minmax(0, 260px) minmax(0, 1fr); gap: 2rem; align-items: center; background: var(--char-bg); border-radius: 22px; padding: 2rem 2.25rem; }
-.char-lead-figure { display: grid; place-items: center; }
-.char-lead-figure img { width: 100%; max-width: 240px; height: auto; }
-.char-role { display: inline-block; background: var(--surface); color: #6b5243; font-weight: 700; font-size: .85rem; padding: .15rem .7rem; border-radius: 999px; }
-.char-lead h2 { font-size: clamp(1.8rem, 1.4rem + 1.5vw, 2.4rem); margin: .4rem 0 .5rem; }
-.char-lead p { font-size: 1.05rem; color: var(--ink-2); margin: 0 0 .35rem; max-width: 34em; }
-.char-tagline { font-weight: 700; color: var(--ink) !important; }
-.char-note { margin-top: .9rem !important; color: var(--muted) !important; font-size: .95rem !important; }
-.chars-subhead { font-size: 1.35rem; margin: 1rem 0 0; color: #6b5243; }
-.char-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 1.1rem; }
-.char-card { background: var(--surface); border: 1px solid var(--line); border-radius: 18px; overflow: hidden; display: flex; flex-direction: column; box-shadow: var(--shadow); transition: transform .15s; }
-.char-card:hover { transform: translateY(-3px); }
-.char-figure { background: var(--char-bg); height: 200px; display: grid; place-items: end center; padding: 1rem 1rem 0; }
-.char-figure img { max-height: 170px; max-width: 100%; width: auto; height: auto; margin-bottom: 10px; }
-.char-card-body { padding: 1rem 1.15rem 1.25rem; }
-.char-card h3 { font-size: 1.3rem; margin: 0 0 .35rem; }
-.char-card p { font-size: .95rem; color: var(--ink-2); margin: 0 0 .4rem; }
-.chars-back { margin: .5rem 0 0; }
-@media (max-width: 640px) {
-  .char-lead { grid-template-columns: 1fr; justify-items: center; text-align: center; padding: 1.5rem 1.25rem; gap: 1rem; }
-  .char-lead-figure img { max-width: 180px; }
-  .char-lead p { margin-inline: auto; }
+.char-peach { --char-bg: #fde4cc; --char-ink: #95561a; }
+.char-mint { --char-bg: #d6eee2; --char-ink: #2c7553; }
+.char-lilac { --char-bg: #e8def5; --char-ink: #674c97; }
+.char-lemon { --char-bg: #faefbf; --char-ink: #7f650a; }
+.char-sky { --char-bg: #d9e7f8; --char-ink: #375c93; }
+.char-rose { --char-bg: #f9dde6; --char-ink: #9e4463; }
+.chars-hero { background: linear-gradient(110deg, var(--hero-1) 0%, var(--hero-2) 48%, var(--hero-3) 100%); padding-top: 3rem; overflow: hidden; }
+.chars-hero h1 { font-size: clamp(2rem, 1.5rem + 2vw, 2.8rem); letter-spacing: .14em; color: #6b5243; margin-bottom: .4rem; }
+.chars-hero-text { max-width: 40rem; }
+.chars-lineup { display: flex; flex-wrap: wrap; justify-content: center; align-items: flex-end; gap: .5rem clamp(.75rem, 2.5vw, 2.25rem); margin-top: 1.75rem; }
+.lineup-item { display: flex; flex-direction: column; align-items: center; gap: .4rem; text-decoration: none; color: var(--char-ink); font-weight: 700; transition: transform .2s; }
+.lineup-item img { height: 120px; width: auto; }
+.lineup-item.is-lead img { height: 190px; }
+.lineup-item span { font-size: .9rem; background: var(--char-bg); padding: .1rem .8rem; border-radius: 999px; margin-bottom: 1rem; }
+.lineup-item:hover, .lineup-item:focus-visible { transform: translateY(-6px); color: var(--char-ink); }
+.char-profiles { display: grid; gap: clamp(1.5rem, 4vw, 3rem); padding-block: 3rem 4rem; }
+.char-profile { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: clamp(1.5rem, 4vw, 4rem); align-items: center; scroll-margin-top: 88px; }
+.char-profile:nth-child(even) { grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); }
+.char-profile:nth-child(even) .char-art { order: 2; }
+.char-art { position: relative; display: grid; place-items: center; aspect-ratio: 6 / 5; width: 100%; max-width: 440px; justify-self: center; }
+.char-art::before { content: ""; position: absolute; inset: 4% 6%; background: var(--char-bg); border-radius: 58% 42% 55% 45% / 52% 58% 42% 48%; }
+.char-profile:nth-child(even) .char-art::before { border-radius: 44% 56% 46% 54% / 56% 44% 56% 44%; }
+.char-art img { position: relative; max-height: 74%; max-width: 64%; width: auto; height: auto; }
+.char-profile.is-lead .char-art img { max-height: 86%; }
+.char-name { font-size: clamp(2rem, 1.6rem + 1.6vw, 2.8rem); letter-spacing: .08em; margin: 0 0 .7rem; color: var(--ink); }
+.char-traits { list-style: none; padding: 0; margin: 0 0 1rem; display: flex; flex-wrap: wrap; gap: .45rem; }
+.char-traits li { background: var(--char-bg); color: var(--char-ink); font-weight: 700; font-size: .92rem; padding: .3rem .9rem; border-radius: 999px; }
+.char-desc p { font-size: 1.05rem; color: var(--ink-2); margin: 0 0 .35rem; max-width: 32em; }
+.char-note { display: inline-flex; align-items: center; gap: .5rem; margin: .9rem 0 0; padding: .45rem .95rem; border-radius: 12px; border: 1.5px dashed var(--char-ink); color: var(--char-ink); font-weight: 700; }
+.char-note svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+.chars-back { margin: 0; }
+@media (max-width: 760px) {
+  .chars-lineup { flex-wrap: nowrap; gap: .4rem; }
+  .lineup-item img { height: 56px; }
+  .lineup-item.is-lead img { height: 92px; }
+  .lineup-item span { font-size: .78rem; padding: .05rem .55rem; }
+  .char-profile, .char-profile:nth-child(even) { grid-template-columns: 1fr; gap: .5rem; }
+  .char-profile:nth-child(even) .char-art { order: 0; }
+  .char-art { max-width: 340px; width: 100%; justify-self: center; }
 }
 
 /* =====================================================================
