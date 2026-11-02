@@ -91,28 +91,34 @@ def create_app(overrides=None):
         return f"{n / 1024 / 1024:.1f} MB" if n >= 1024 * 1024 else f"{max(1, n // 1024)} KB"
 
     # 公開頁的角色插圖：放在 static/img/mascots/ 的圖檔，沒有就不顯示。
-    # 檔名以 main 開頭的是「大主角」（首頁與每位老師的頁首都會出現），其餘為配角。
+    # 檔名以 main 開頭的是「大主角」（首頁一定有；老師頁首出現機會較高），其餘為配角。
     mascot_dir = Path(app.static_folder) / "img" / "mascots"
     mascots = sorted(p.name for p in mascot_dir.iterdir()
                      if p.suffix.lower() in {".png", ".webp", ".svg"}) if mascot_dir.is_dir() else []
     mascot_main = next((m for m in mascots if m.startswith("main")), None)
     mascot_cast = [m for m in mascots if m != mascot_main] or mascots
+    MAIN_WEIGHT = 3   # 老師頁首：大主角的權重（每個配角為 1），3 → 約 3/8 的老師頁首由大主角擔綱
 
     def mascot_layout(key):
         """依老師代碼隨機（但固定）分配角色。
-        buddy：卡片上的配角；頁首一定有大主角，隨機用 solo（主角單獨放大）
-        或 group（主角站中間、兩旁是隨機配角）。"""
+        buddy：這位老師的配角，放在列表卡片；star：頁首的主要角色，大主角機會較高，否則就是 buddy。
+        頁首隨機用 solo（star 單獨放大）或 group（star 站中間，兩旁是配角，含 buddy）。"""
         if not mascots:
             return {}
         n = int(hashlib.md5(str(key).encode("utf-8")).hexdigest()[:8], 16)   # 只用來打散，不涉及安全
         buddy = mascot_cast[n % len(mascot_cast)]
-        star = mascot_main or buddy
-        others = [m for m in mascot_cast if m != star]
-        k = n // len(mascot_cast)
-        if len(others) >= 2 and k % 2:
-            i = (k // 2) % len(others)
-            j = (i + 1 + (k // 7) % (len(others) - 1)) % len(others)   # 一定和 i 不同
-            return {"buddy": buddy, "star": star, "group": [others[i], star, others[j]]}
+        slots = MAIN_WEIGHT + len(mascot_cast)
+        star = mascot_main if mascot_main and n % slots < MAIN_WEIGHT else buddy
+        k = n // (slots * len(mascot_cast))          # 與上面兩次挑選互不相關
+        others = [m for m in mascot_cast if m not in (star, buddy)]
+        if others and k % 2:
+            side = others[(k // 2) % len(others)]
+            if star == buddy:                         # 兩旁都是其他配角
+                rest = [m for m in others if m != side]
+                if not rest:
+                    return {"buddy": buddy, "star": star, "solo": star}
+                return {"buddy": buddy, "star": star, "group": [side, star, rest[(k // 7) % len(rest)]]}
+            return {"buddy": buddy, "star": star, "group": [buddy, star, side]}   # 大主角在中間，旁邊有 buddy
         return {"buddy": buddy, "star": star, "solo": star}
 
     @app.context_processor
