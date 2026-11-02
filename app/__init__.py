@@ -90,22 +90,30 @@ def create_app(overrides=None):
         n = n or 0
         return f"{n / 1024 / 1024:.1f} MB" if n >= 1024 * 1024 else f"{max(1, n // 1024)} KB"
 
-    # 公開頁的角色插圖：放在 static/img/mascots/ 的圖檔（依檔名排序），沒有就不顯示
+    # 公開頁的角色插圖：放在 static/img/mascots/ 的圖檔，沒有就不顯示。
+    # 檔名以 main 開頭的是「大主角」（首頁與每位老師的頁首都會出現），其餘為配角。
     mascot_dir = Path(app.static_folder) / "img" / "mascots"
     mascots = sorted(p.name for p in mascot_dir.iterdir()
                      if p.suffix.lower() in {".png", ".webp", ".svg"}) if mascot_dir.is_dir() else []
+    mascot_main = next((m for m in mascots if m.startswith("main")), None)
+    mascot_cast = [m for m in mascots if m != mascot_main] or mascots
 
     def mascot_layout(key):
-        """依老師代碼隨機（但固定）分配角色：buddy＝代表角色（卡片與頁首共用）；
-        頁首隨機用 solo（代表角色單獨放大）或 group（三個角色站一排，代表角色在中間）。"""
+        """依老師代碼隨機（但固定）分配角色。
+        buddy：卡片上的配角；頁首一定有大主角，隨機用 solo（主角單獨放大）
+        或 group（主角站中間、兩旁是隨機配角）。"""
         if not mascots:
             return {}
         n = int(hashlib.md5(str(key).encode("utf-8")).hexdigest()[:8], 16)   # 只用來打散，不涉及安全
-        buddy = mascots[n % len(mascots)]
-        others = [m for m in mascots if m != buddy][:2]
-        if len(others) == 2 and (n // len(mascots)) % 2:
-            return {"buddy": buddy, "group": [others[0], buddy, others[1]]}
-        return {"buddy": buddy, "solo": buddy}
+        buddy = mascot_cast[n % len(mascot_cast)]
+        star = mascot_main or buddy
+        others = [m for m in mascot_cast if m != star]
+        k = n // len(mascot_cast)
+        if len(others) >= 2 and k % 2:
+            i = (k // 2) % len(others)
+            j = (i + 1 + (k // 7) % (len(others) - 1)) % len(others)   # 一定和 i 不同
+            return {"buddy": buddy, "star": star, "group": [others[i], star, others[j]]}
+        return {"buddy": buddy, "star": star, "solo": star}
 
     @app.context_processor
     def _inject():
@@ -127,6 +135,7 @@ def create_app(overrides=None):
             "current_user": g.get("user"),
             "eurl": eurl,
             "mascot_layout": mascot_layout,
+            "mascot_main": mascot_main,
         }
 
     # ---------------- 藍圖
