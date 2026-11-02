@@ -807,11 +807,8 @@ kbd { font-family: inherit; font-size: .8em; border: 1px solid var(--line); bord
 .lineup-item:hover, .lineup-item:focus-visible { transform: translateY(-6px); color: var(--char-ink); }
 .char-profiles { display: grid; gap: clamp(1.5rem, 4vw, 3rem); padding-block: 3rem 4rem; }
 .char-profile { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: clamp(1.5rem, 4vw, 4rem); align-items: center; scroll-margin-top: 88px; }
-.char-profile:nth-child(even) { grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); }
-.char-profile:nth-child(even) .char-art { order: 2; }
 .char-art { position: relative; display: grid; place-items: center; aspect-ratio: 6 / 5; width: 100%; max-width: 440px; justify-self: center; }
 .char-art::before { content: ""; position: absolute; inset: 4% 6%; background: var(--char-bg); border-radius: 58% 42% 55% 45% / 52% 58% 42% 48%; }
-.char-profile:nth-child(even) .char-art::before { border-radius: 44% 56% 46% 54% / 56% 44% 56% 44%; }
 .char-art img { position: relative; max-height: 74%; max-width: 64%; width: auto; height: auto; }
 .char-profile.is-lead .char-art img { max-height: 86%; }
 .char-name { font-size: clamp(2rem, 1.6rem + 1.6vw, 2.8rem); letter-spacing: .08em; margin: 0 0 .7rem; color: var(--ink); }
@@ -821,13 +818,21 @@ kbd { font-family: inherit; font-size: .8em; border: 1px solid var(--line); bord
 .char-note { display: inline-flex; align-items: center; gap: .5rem; margin: .9rem 0 0; padding: .45rem .95rem; border-radius: 12px; border: 1.5px dashed var(--char-ink); color: var(--char-ink); font-weight: 700; }
 .char-note svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex: none; }
 .chars-back { margin: 0; }
+.char-profile[hidden] { display: none; }
+/* 啟用分頁後：選中的角色抬高、名字標籤變深色，其他角色稍淡；介紹淡入 */
+.char-tabs-on .lineup-item { opacity: .72; }
+.char-tabs-on .lineup-item[aria-selected="true"] { opacity: 1; transform: translateY(-8px); }
+.char-tabs-on .lineup-item[aria-selected="true"] span { background: var(--char-ink); color: #fff; }
+.char-tabs-on .lineup-item:hover { opacity: 1; }
+.char-switched .char-profile:not([hidden]) { animation: char-in .35s ease-out; }   /* 只在點選切換時淡入 */
+@keyframes char-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .char-switched .char-profile:not([hidden]) { animation: none; } }
 @media (max-width: 760px) {
   .chars-lineup { flex-wrap: nowrap; gap: .4rem; }
   .lineup-item img { height: 56px; }
   .lineup-item.is-lead img { height: 92px; }
   .lineup-item span { font-size: .78rem; padding: .05rem .55rem; }
-  .char-profile, .char-profile:nth-child(even) { grid-template-columns: 1fr; gap: .5rem; }
-  .char-profile:nth-child(even) .char-art { order: 0; }
+  .char-profile { grid-template-columns: 1fr; gap: .5rem; }
   .char-art { max-width: 340px; width: 100%; justify-self: center; }
 }
 
