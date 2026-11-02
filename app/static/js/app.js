@@ -600,6 +600,48 @@
   });
   $$("[data-print]").forEach(function (b) { b.addEventListener("click", function () { window.print(); }); });
 
+  // ---------------------------------------------------------------- 角色介紹：點角色只顯示該角色（預設大主角）
+  $$("[data-char-tabs]").forEach(function (list) {
+    var tabs = $$("[data-char]", list);
+    var panels = $$("[data-char-panel]");
+    if (!tabs.length || !panels.length) return;
+    document.documentElement.classList.add("char-tabs-on");
+    function select(key, focus) {
+      var found = false;
+      tabs.forEach(function (t) {
+        var on = t.getAttribute("data-char") === key;
+        found = found || on;
+        t.setAttribute("aria-selected", on ? "true" : "false");
+        t.tabIndex = on ? 0 : -1;
+        if (on && focus) t.focus();
+      });
+      if (!found) return false;
+      if (focus !== undefined) document.documentElement.classList.add("char-switched");
+      panels.forEach(function (p) { p.hidden = p.id !== key; });
+      return true;
+    }
+    var fromHash = (location.hash || "").slice(1);
+    var initial = tabs.some(function (t) { return t.getAttribute("data-char") === fromHash; }) ? fromHash
+      : (($("[data-default]", list) || tabs[0]).getAttribute("data-char"));
+    select(initial);
+    tabs.forEach(function (t, i) {
+      t.addEventListener("click", function (e) {
+        e.preventDefault();
+        var key = t.getAttribute("data-char");
+        select(key, false);
+        if (history.replaceState) history.replaceState(null, "", "#" + key);   // 可分享某位角色，畫面不跳動
+      });
+      t.addEventListener("keydown", function (e) {
+        var d = e.key === "ArrowRight" ? 1 : e.key === "ArrowLeft" ? -1 : 0;
+        if (!d) return;
+        e.preventDefault();
+        var next = tabs[(i + d + tabs.length) % tabs.length];
+        select(next.getAttribute("data-char"), true);
+        if (history.replaceState) history.replaceState(null, "", "#" + next.getAttribute("data-char"));
+      });
+    });
+  });
+
   // ---------------------------------------------------------------- 表格下載成 CSV（臨時密碼只在瀏覽器端產生檔案，不經伺服器保存）
   $$("[data-download-table]").forEach(function (btn) {
     btn.addEventListener("click", function () {

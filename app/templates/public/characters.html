@@ -12,9 +12,10 @@
       <h1>{{ title }}</h1>
       <p class="hero-lead">點選角色，認識一起在網路世界冒險的六位夥伴。</p>
     </div>
-    <nav class="chars-lineup" aria-label="角色">
+    <nav class="chars-lineup" aria-label="角色" role="tablist" data-char-tabs>
       {% for c in lineup %}
-        <a class="lineup-item char-{{ c.tone }}{{ ' is-lead' if c.lead }}" href="#{{ c.key }}">
+        <a class="lineup-item char-{{ c.tone }}{{ ' is-lead' if c.lead }}" href="#{{ c.key }}" id="tab-{{ c.key }}"
+           role="tab" aria-controls="{{ c.key }}" data-char="{{ c.key }}"{% if c.lead %} data-default{% endif %}>
           <img src="{{ url_for('static', filename='img/mascots/' ~ c.file) }}" alt="">
           <span>{{ c.name }}</span>
         </a>
@@ -24,8 +25,10 @@
 </section>
 
 <div class="container char-profiles">
+  {# 一次只顯示一位角色（預設 e度），由 app.js 依點選切換；沒有 JS 時全部依序顯示 #}
   {% for c in characters %}
-    <article class="char-profile char-{{ c.tone }}{{ ' is-lead' if c.lead }}" id="{{ c.key }}" aria-labelledby="{{ c.key }}-name">
+    <article class="char-profile char-{{ c.tone }}{{ ' is-lead' if c.lead }}" id="{{ c.key }}" role="tabpanel"
+             aria-labelledby="{{ c.key }}-name" data-char-panel>
       <div class="char-art">
         <img src="{{ url_for('static', filename='img/mascots/' ~ c.file) }}" alt="{{ c.name }}" loading="lazy">
       </div>
