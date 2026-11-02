@@ -35,7 +35,11 @@
       <p class="eyebrow">數位學習 · 智慧教室</p>
       <h1>{{ site_name }}</h1>
       <p class="hero-lead">{{ site_tagline }}。目前共有 <strong>{{ total }}</strong> 位老師分享數位課程。</p>
-      {% if mascot_main %}<img class="home-mascot" src="{{ url_for('static', filename='img/mascots/' ~ mascot_main) }}" alt="" aria-hidden="true">{% endif %}
+      {% if mascot_main %}
+        <a class="home-mascot" href="{{ url_for('public.characters_page') }}" aria-label="角色介紹：認識 e度 和好朋友們">
+          <img src="{{ url_for('static', filename='img/mascots/' ~ mascot_main) }}" alt="">
+        </a>
+      {% endif %}
     </div>
 
     <form class="search-card card" method="get" action="{{ url_for('public.home') }}#list" role="search">

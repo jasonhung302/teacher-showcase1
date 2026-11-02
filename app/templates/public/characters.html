@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block title %}角色介紹｜{{ title }}｜{{ site_name }}{% endblock %}
+{% block meta %}
+  <meta name="description" content="{{ title }}：認識 {{ lead.name }} 和 {{ cast|map(attribute='name')|join('、') }}。">
+{% endblock %}
+{% block body_class %}page-characters{% endblock %}
+{% block main %}
+<section class="chars-hero">
+  <div class="container">
+    <p class="eyebrow">角色介紹</p>
+    <h1>{{ title }}</h1>
+  </div>
+</section>
+
+<section class="container section chars">
+  <article class="char-lead char-{{ lead.tone }}" aria-labelledby="char-lead-name">
+    <div class="char-lead-figure">
+      <img src="{{ url_for('static', filename='img/mascots/' ~ lead.file) }}" alt="{{ lead.name }}">
+    </div>
+    <div class="char-lead-text">
+      <span class="char-role">大主角</span>
+      <h2 id="char-lead-name">{{ lead.name }}</h2>
+      <p class="char-tagline">{{ lead.tagline }}</p>
+      {% for line in lead.lines %}<p>{{ line }}</p>{% endfor %}
+      <p class="char-note">{{ lead.note }}</p>
+    </div>
+  </article>
+
+  <h2 class="chars-subhead">好朋友們</h2>
+  <div class="char-grid">
+    {% for c in cast %}
+      <article class="char-card char-{{ c.tone }}" aria-labelledby="char-{{ loop.index }}">
+        <div class="char-figure">
+          <img src="{{ url_for('static', filename='img/mascots/' ~ c.file) }}" alt="{{ c.name }}" loading="lazy">
+        </div>
+        <div class="char-card-body">
+          <h3 id="char-{{ loop.index }}">{{ c.name }}</h3>
+          <p class="char-tagline">{{ c.tagline }}</p>
+          {% for line in c.lines %}<p>{{ line }}</p>{% endfor %}
+        </div>
+      </article>
+    {% endfor %}
+  </div>
+
+  <p class="chars-back"><a href="{{ url_for('public.home') }}">← 回到教師列表</a></p>
+</section>
+{% endblock %}
