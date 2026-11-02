@@ -94,9 +94,10 @@ def home():
 
 @bp.route("/characters")
 def characters_page():
-    """角色介紹：吱可思大冒險的大主角與好朋友們。"""
-    return render_template("public/characters.html", title=characters.TITLE, lead=characters.LEAD,
-                           cast=characters.CAST)
+    """角色介紹：吱可思大冒險的六位角色。"""
+    by_key = {c["key"]: c for c in characters.CHARACTERS}
+    return render_template("public/characters.html", title=characters.TITLE, characters=characters.CHARACTERS,
+                           lineup=[by_key[k] for k in characters.LINEUP])
 
 
 def _published_or_404(code):
