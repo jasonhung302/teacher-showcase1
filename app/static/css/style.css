@@ -186,7 +186,9 @@ body.page-home { background: linear-gradient(180deg, #e8f0f8 0, #eef3f8 560px, v
 .search-card { margin-top: 1.5rem; padding: 1.25rem; position: relative; z-index: 1; }
 .home-intro { position: relative; }
 /* 大主角：站在標題右側，下緣藏在搜尋卡片後面 */
-.home-mascot { position: absolute; right: 24px; bottom: -44px; height: 190px; width: auto; pointer-events: none; }
+.home-mascot { position: absolute; right: 24px; bottom: -44px; display: block; transition: transform .2s; }
+.home-mascot img { height: 190px; width: auto; }
+.home-mascot:hover { transform: translateY(-4px) rotate(-2deg); }
 .search-grid { display: grid; grid-template-columns: 2fr 1fr 1fr 1.4fr auto; gap: .75rem; align-items: end; }
 .search-grid .field { margin: 0; }
 .search-actions { display: flex; gap: .5rem; }
@@ -781,6 +783,42 @@ kbd { font-family: inherit; font-size: .8em; border: 1px solid var(--line); bord
   .menu-panel { right: auto; left: 0; }
   .share-buttons { grid-template-columns: 1fr; }
   .head-actions { width: 100%; }
+}
+
+/* =====================================================================
+   角色介紹（/characters）：吱可思大冒險
+   ===================================================================== */
+.char-peach { --char-bg: #fdeedd; }
+.char-mint { --char-bg: #e2f1ea; }
+.char-lilac { --char-bg: #efe8f5; }
+.char-lemon { --char-bg: #fdf6d6; }
+.char-sky { --char-bg: #e4edf9; }
+.char-rose { --char-bg: #fbe8ee; }
+.chars-hero { background: linear-gradient(110deg, var(--hero-1) 0%, var(--hero-2) 48%, var(--hero-3) 100%); padding-block: 3rem 2.25rem; }
+.chars-hero h1 { font-size: clamp(2rem, 1.5rem + 2vw, 2.8rem); letter-spacing: .14em; color: #6b5243; margin: 0; }
+.chars { display: grid; gap: 1.25rem; }
+.char-lead { display: grid; grid-template-columns: minmax(0, 260px) minmax(0, 1fr); gap: 2rem; align-items: center; background: var(--char-bg); border-radius: 22px; padding: 2rem 2.25rem; }
+.char-lead-figure { display: grid; place-items: center; }
+.char-lead-figure img { width: 100%; max-width: 240px; height: auto; }
+.char-role { display: inline-block; background: var(--surface); color: #6b5243; font-weight: 700; font-size: .85rem; padding: .15rem .7rem; border-radius: 999px; }
+.char-lead h2 { font-size: clamp(1.8rem, 1.4rem + 1.5vw, 2.4rem); margin: .4rem 0 .5rem; }
+.char-lead p { font-size: 1.05rem; color: var(--ink-2); margin: 0 0 .35rem; max-width: 34em; }
+.char-tagline { font-weight: 700; color: var(--ink) !important; }
+.char-note { margin-top: .9rem !important; color: var(--muted) !important; font-size: .95rem !important; }
+.chars-subhead { font-size: 1.35rem; margin: 1rem 0 0; color: #6b5243; }
+.char-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 1.1rem; }
+.char-card { background: var(--surface); border: 1px solid var(--line); border-radius: 18px; overflow: hidden; display: flex; flex-direction: column; box-shadow: var(--shadow); transition: transform .15s; }
+.char-card:hover { transform: translateY(-3px); }
+.char-figure { background: var(--char-bg); height: 200px; display: grid; place-items: end center; padding: 1rem 1rem 0; }
+.char-figure img { max-height: 170px; max-width: 100%; width: auto; height: auto; margin-bottom: 10px; }
+.char-card-body { padding: 1rem 1.15rem 1.25rem; }
+.char-card h3 { font-size: 1.3rem; margin: 0 0 .35rem; }
+.char-card p { font-size: .95rem; color: var(--ink-2); margin: 0 0 .4rem; }
+.chars-back { margin: .5rem 0 0; }
+@media (max-width: 640px) {
+  .char-lead { grid-template-columns: 1fr; justify-items: center; text-align: center; padding: 1.5rem 1.25rem; gap: 1rem; }
+  .char-lead-figure img { max-width: 180px; }
+  .char-lead p { margin-inline: auto; }
 }
 
 /* =====================================================================

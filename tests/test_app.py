@@ -436,6 +436,13 @@ class PublishTests(Base):
         self.assertIn("林怡君", html.split('id="list"')[1])
         self.assertIn("回到今日活動教師", html)
 
+    def test_characters_page(self):
+        html = self.client.get("/characters").get_data(as_text=True)
+        self.assertIn("吱可思大冒險", html)
+        for name in ("e度", "快讚", "歐匿", "吱吱", "可可", "思思"):
+            self.assertIn(name, html)
+        self.assertIn('href="/characters"', self.client.get("/").get_data(as_text=True))   # 上方選單有連結
+
     def test_outside_event_lists_everyone(self):
         with mock.patch("app.public.local_today", return_value="2026-11-16"):
             html = self.client.get("/").get_data(as_text=True)

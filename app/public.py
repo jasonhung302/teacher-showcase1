@@ -6,6 +6,7 @@ import re
 from flask import (Blueprint, Response, abort, current_app, g, make_response, render_template, request,
                    send_file)
 
+from . import characters
 from .db import local_today, parse_ts, query
 from .profiles import COUNTIES
 from .qr import to_svg
@@ -89,6 +90,13 @@ def home():
                            event_day=event_day, day_view=day_view, regions=regions,
                            preview_day=event_day["date"] if event_day and preview == event_day["date"] else None,
                            filters={"q": q, "county": county, "subject": subject, "school": school})
+
+
+@bp.route("/characters")
+def characters_page():
+    """角色介紹：吱可思大冒險的大主角與好朋友們。"""
+    return render_template("public/characters.html", title=characters.TITLE, lead=characters.LEAD,
+                           cast=characters.CAST)
 
 
 def _published_or_404(code):
